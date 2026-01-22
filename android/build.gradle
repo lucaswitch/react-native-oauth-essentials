@@ -1,9 +1,9 @@
 buildscript {
   ext.OauthEssentials = [
-    kotlinVersion: "2.0.21",
-    minSdkVersion: 24,
+    kotlinVersion    : "2.0.21",
+    minSdkVersion    : 24,
     compileSdkVersion: 36,
-    targetSdkVersion: 36
+    targetSdkVersion : 36
   ]
 
   ext.getExtOrDefault = { prop ->
@@ -64,4 +64,7 @@ android {
 
 dependencies {
   implementation "com.facebook.react:react-android"
+  implementation 'androidx.compose.runtime:runtime:1.10.1'
+  implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+  implementation 'com.google.android.gms:play-services-auth:21.5.0'
 }
