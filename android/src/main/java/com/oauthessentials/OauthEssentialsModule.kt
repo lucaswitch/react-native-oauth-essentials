@@ -103,7 +103,6 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     }
   }
 
-
   @RequiresApi(Build.VERSION_CODES.O)
   override fun appleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
     promise.reject(
