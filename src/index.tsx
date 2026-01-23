@@ -6,6 +6,7 @@ import type {
   GoogleSignInOptions,
   PasswordCredentialResult,
 } from './types';
+
 export * from './types';
 
 /**
@@ -20,28 +21,9 @@ export async function googleSignIn(
   webClientId: string,
   options?: GoogleSignInOptions
 ): Promise<GoogleIdCredentialResult> {
-  const bridgeOptions = {
-    authorizedAccounts: false,
-    autoSelectEnabled: false,
-  };
-
-  const hasOptions =
-    options && typeof options === 'object' && Object.keys(options).length > 0;
-
-  if (hasOptions) {
-    if (Platform.OS === 'android') {
-      if (options.hasOwnProperty('authorizedAccounts')) {
-        bridgeOptions.authorizedAccounts = options.authorizedAccounts === true;
-      }
-      if (options.hasOwnProperty('autoSelectEnabled')) {
-        bridgeOptions.autoSelectEnabled = options.autoSelectEnabled === true;
-      }
-    }
-  }
-
   return (await OauthEssentials.googleSignIn(
     webClientId,
-    bridgeOptions
+    parseGoogleIdOptions(options)
   )) as GoogleIdCredentialResult;
 }
 
@@ -84,10 +66,41 @@ export async function appleSignIn(): Promise<AppleIdCredentialResult> {
  * Performs all sign in methods available on the platform at once.
  * This is supposed to be used on app start to get any existing sign in.
  */
-export async function signIn() {
-  if (Platform.OS === 'ios') {
-  } else {
+export async function hybridSignIn(
+  googleClientId: string,
+  options?: GoogleSignInOptions
+): Promise<
+  AppleIdCredentialResult | GoogleIdCredentialResult | PasswordCredentialResult
+> {
+  return (await OauthEssentials.hybridSignIn(
+    googleClientId,
+    parseGoogleIdOptions(options)
+  )) as
+    | AppleIdCredentialResult
+    | GoogleIdCredentialResult
+    | PasswordCredentialResult;
+}
+
+function parseGoogleIdOptions(options?: any) {
+  const bridgeOptions = {
+    authorizedAccounts: false,
+    autoSelectEnabled: false,
+  };
+
+  const hasOptions =
+    options && typeof options === 'object' && Object.keys(options).length > 0;
+
+  if (hasOptions) {
+    if (Platform.OS === 'android') {
+      if (options.hasOwnProperty('authorizedAccounts')) {
+        bridgeOptions.authorizedAccounts = options.authorizedAccounts === true;
+      }
+      if (options.hasOwnProperty('autoSelectEnabled')) {
+        bridgeOptions.autoSelectEnabled = options.autoSelectEnabled === true;
+      }
+    }
   }
+  return bridgeOptions;
 }
 
 const CONSTANTS = OauthEssentials.getConstants();

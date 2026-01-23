@@ -6,8 +6,8 @@ import Security
 import UIKit
 
 @objcMembers public class OauthEssentialsModule: NSObject,
-  ASAuthorizationControllerDelegate,
-  ASAuthorizationControllerPresentationContextProviding {
+ASAuthorizationControllerDelegate,
+ASAuthorizationControllerPresentationContextProviding {
 
   private var resolve: RCTPromiseResolveBlock?
   private var reject: RCTPromiseRejectBlock?
@@ -25,15 +25,15 @@ import UIKit
     case notSupportedError = "NOT_SUPPORTED_ERROR"
   }
 
-  @objc(requiresMainQueueSetup)
-  static func requiresMainQueueSetup() -> Bool { true }
+  @objc(requiresMainQueueSetup) static func requiresMainQueueSetup() -> Bool {
+    true
+  }
 
-  @objc
-  public func getConstants() -> [String: Any] {
+  @objc public func getConstants() -> [String: Any] {
     var googleIdSupported: Bool = false
-    var appleIdSupported: Bool  = false
-    var passwordSupported: Bool  = false
-    if #available(iOS 13.0, *) {
+    var appleIdSupported: Bool = false
+    var passwordSupported: Bool = false
+    if #available (iOS 13.0, *) {
       // Modern GoogleSignIn works on iOS 13+
       googleIdSupported = true
       appleIdSupported = true
@@ -52,11 +52,11 @@ import UIKit
     let clientIdPrefix = clientId.replacingOccurrences(of: ".apps.googleusercontent.com", with: "")
     let reversedClientId = "com.googleusercontent.apps.\(clientIdPrefix)"
     print("Reversed client ID: \(reversedClientId)")
-    guard let urlTypes = Bundle.main.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]] else {
+    guard let urlTypes = Bundle.main.infoDictionary ?["CFBundleURLTypes"] as ? [[String: Any]] else {
       return true
     }
     for urlType in urlTypes {
-      if let schemes = urlType["CFBundleURLSchemes"] as? [String],
+      if let schemes = urlType["CFBundleURLSchemes"] as ? [String],
       schemes.contains(reversedClientId) {
         return false
       }
@@ -65,13 +65,10 @@ import UIKit
   }
 
 
-  @objc
-  public func googleSignIn(
-  _ clientId: String,
+  @objc public func googleSignIn(_ clientId: String,
   options: NSDictionary,
   resolver resolve: @escaping RCTPromiseResolveBlock,
-  rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
+  rejecter reject: @escaping RCTPromiseRejectBlock) {
 
     if isGoogleSignInSchemeMissing(clientId: clientId) {
       reject(
@@ -83,14 +80,16 @@ import UIKit
     }
 
     let rootVC: UIViewController?
-    if #available(iOS 13.0, *) {
-      rootVC = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap { $0.windows }
-      .first { $0.isKeyWindow }?
-      .rootViewController
+    if #available (iOS 13.0, *) {
+      rootVC = UIApplication.shared.connectedScenes.compactMap {
+        $0 as ?UIWindowScene
+      }.flatMap {
+        $0.windows
+      }.first {
+        $0.isKeyWindow
+      } ?.rootViewController
     } else {
-      rootVC = UIApplication.shared.keyWindow?.rootViewController
+      rootVC = UIApplication.shared.keyWindow ?.rootViewController
     }
 
     guard let rootVC = rootVC else {
@@ -103,7 +102,8 @@ import UIKit
     }
 
     GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
-    GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { result, error in
+    GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) {
+      result, error in
       if let error = error {
         reject(CredentialError.invalidResult.rawValue, error.localizedDescription, error)
         self.resolve = nil
@@ -111,7 +111,7 @@ import UIKit
         return
       }
 
-      guard let user = result?.user else {
+      guard let user = result ?.user else {
         reject(CredentialError.invalidResult.rawValue, "No user returned", nil)
         self.resolve = nil
         self.reject = nil
@@ -120,13 +120,13 @@ import UIKit
 
       let profile = user.profile
       let data: [String: Any] = [
-        "idToken": user.idToken?.tokenString ?? "",
+        "idToken": user.idToken ?.tokenString ?? "",
         "id": user.userID ?? "",
-        "displayName": profile?.name ?? "",
-        "givenName": profile?.givenName ?? "",
-        "familyName": profile?.familyName ?? "",
-        "profilePictureUri": profile?.imageURL(withDimension: 200)?.absoluteString ?? "",
-        "email": profile?.email ?? ""
+        "displayName": profile ?.name ?? "",
+        "givenName": profile ?.givenName ?? "",
+        "familyName": profile ?.familyName ?? "",
+        "profilePictureUri": profile ?.imageURL(withDimension: 200) ?.absoluteString ?? "",
+        "email": profile ?.email ?? ""
       ]
 
       resolve([
@@ -136,11 +136,8 @@ import UIKit
     }
   }
 
-  @objc(appleSignIn:rejecter:)
-  public func appleSignIn(
-  resolve: @escaping RCTPromiseResolveBlock,
-  rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
+  @objc(appleSignIn:rejecter:) public func appleSignIn(resolve: @escaping RCTPromiseResolveBlock,
+  rejecter reject: @escaping RCTPromiseRejectBlock) {
     guard self.reject == nil else {
       reject(
         CredentialError.simultaneousCallError.rawValue,
@@ -160,97 +157,99 @@ import UIKit
     controller.delegate = self
     controller.presentationContextProvider = self
 
-    if #available(iOS 16.0, *) {
+    if #available (iOS 16.0, *) {
       controller.performRequests(options: .preferImmediatelyAvailableCredentials)
     } else {
       controller.performRequests()
     }
   }
 
-  @objc
-  public func passwordSignIn(
-    _ username: String, password: String,
-    resolver resolve: @escaping RCTPromiseResolveBlock,
-    rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
-    reject(CredentialError.notSupportedError.rawValue, "Password sign-in is not supported on iOS via this method. Use getPassword instead.", nil)
+  @objc public func passwordSignIn(_ username: String, password: String,
+  resolver resolve: @escaping RCTPromiseResolveBlock,
+  rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let passwordCredential = ASPasswordCredential(user: username, password: password)
+    ASCredentialIdentityStore.shared.saveCredential(passwordCredential) {
+      success, error in
+      if success {
+        resolve(true)
+      } else {
+        reject(
+          CredentialError.invalidResult.rawValue, error.localizedDescription, error
+        )
+      }
+    }
   }
 
-  @objc
-  public func getPassword(
-    resolver resolve: @escaping RCTPromiseResolveBlock,
-    rejecter reject: @escaping RCTPromiseRejectBlock
-  ) {
-      guard self.reject == nil else {
-        reject(
-          CredentialError.simultaneousCallError.rawValue,
-          "Another sign-in operation is in progress",
-          nil
-        )
-        return
-      }
-      self.resolve = resolve
-      self.reject = reject
+  @objc public func getPassword(resolver resolve: @escaping RCTPromiseResolveBlock,
+  rejecter reject: @escaping RCTPromiseRejectBlock) {
+    guard self.reject == nil else {
+      reject(
+        CredentialError.simultaneousCallError.rawValue,
+        "Another sign-in operation is in progress",
+        nil
+      )
+      return
+    }
+    self.resolve = resolve
+    self.reject = reject
 
-      let controller = ASAuthorizationController(authorizationRequests: [
-        ASAuthorizationPasswordProvider().createRequest()
+    let controller = ASAuthorizationController(authorizationRequests: [
+      ASAuthorizationPasswordProvider().createRequest()
+    ])
+
+    controller.delegate = self
+    controller.presentationContextProvider = self
+
+    if #available (iOS 16.0, *) {
+      controller.performRequests(options: .preferImmediatelyAvailableCredentials)
+    } else {
+      controller.performRequests()
+    }
+  }
+
+  public func authorizationController(controller: ASAuthorizationController,
+  didCompleteWithAuthorization authorization: ASAuthorization) {
+    switch authorization.credential {
+    case let appleIDCredential as ASAuthorizationAppleIDCredential:
+      let idToken: Any = appleIDCredential.identityToken.flatMap {
+        String(data: $0, encoding: .utf8)
+      } ?? NSNull()
+
+      let authorizationCode: Any = appleIDCredential.authorizationCode.flatMap {
+        String(data: $0, encoding: .utf8)
+      } ?? NSNull()
+
+      let fullName = appleIDCredential.fullName.flatMap {
+        PersonNameComponentsFormatter().string(from: $0)
+      } ?? ""
+
+      let data: [String: Any] = [
+        "idToken": idToken,
+        "authorizationCode": authorizationCode,
+        "user": appleIDCredential.user,
+        "email": appleIDCredential.email ?? "",
+        "fullName": fullName,
+        "likelyReal": appleIDCredential.realUserStatus == .likelyReal
+      ]
+
+      let result: [String: Any] = [
+        "type": CredentialsType.appleId.rawValue,
+        "data": data
+      ]
+
+      resolve ?(result)
+
+    case let passwordCredential as ASPasswordCredential:
+      self.resolve ?([
+        "type": CredentialsType.password.rawValue,
+        "data": [
+          "username": passwordCredential.user,
+          "password": passwordCredential.password
+        ]
       ])
 
-      controller.delegate = self
-      controller.presentationContextProvider = self
-
-      if #available(iOS 16.0, *) {
-        controller.performRequests(options: .preferImmediatelyAvailableCredentials)
-      } else {
-        controller.performRequests()
-      }
-  }
-
-  public func authorizationController(
-    controller: ASAuthorizationController,
-    didCompleteWithAuthorization authorization: ASAuthorization
-  ) {
-    switch authorization.credential {
-      case let appleIDCredential as ASAuthorizationAppleIDCredential:
-        let idToken: Any =
-        appleIDCredential.identityToken
-        .flatMap { String(data: $0, encoding: .utf8) } ?? NSNull()
-
-        let authorizationCode: Any =
-        appleIDCredential.authorizationCode
-        .flatMap { String(data: $0, encoding: .utf8) } ?? NSNull()
-
-        let fullName =
-        appleIDCredential.fullName
-        .flatMap { PersonNameComponentsFormatter().string(from: $0) } ?? ""
-
-        let data: [String: Any] = [
-          "idToken": idToken,
-          "authorizationCode": authorizationCode,
-          "user": appleIDCredential.user,
-          "email": appleIDCredential.email ?? "",
-          "fullName": fullName,
-          "likelyReal": appleIDCredential.realUserStatus == .likelyReal
-        ]
-
-        let result: [String: Any] = [
-          "type": CredentialsType.appleId.rawValue,
-          "data": data
-        ]
-
-        resolve?(result)
-
-      case let passwordCredential as ASPasswordCredential:
-        self.resolve?([
-          "type": CredentialsType.password.rawValue,
-          "data": [
-            "username": passwordCredential.user,
-            "password": passwordCredential.password
-          ]
-        ])
-
     default:
-      reject?(
+      reject ?(
         CredentialError.invalidResult.rawValue,
         "Unsupported authorization credential type",
         nil
@@ -261,23 +260,23 @@ import UIKit
   }
 
   public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-    self.reject?(
+    self.reject ?(
       CredentialError.invalidResult.rawValue,
       error.localizedDescription,
       error
     )
   }
 
-  public func presentationAnchor(
-    for controller: ASAuthorizationController
-  ) -> ASPresentationAnchor {
-      guard let scene = UIApplication.shared.connectedScenes
-      .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-      let window = scene.windows.first(where: { $0.isKeyWindow })
-      else {
+  public func presentationAnchor(forcontroller: ASAuthorizationController) -> ASPresentationAnchor {
+    guard let scene = UIApplication.shared.connectedScenes.first(where: {
+      $0.activationState == .foregroundActive
+    }) as ?UIWindowScene,
+    let window = scene.windows.first(where: {
+      $0.isKeyWindow
+    }) else {
       return UIWindow()
-      }
+    }
 
-      return window
+    return window
   }
 }
