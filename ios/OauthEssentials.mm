@@ -1,17 +1,12 @@
 #import "OauthEssentials.h"
 #import <AuthenticationServices/AuthenticationServices.h>
 #import "OauthEssentials-Swift.h"
-#if __has_include("OauthEssentials/OauthEssentials-Swift.h")
-#import "OauthEssentials/OauthEssentials-Swift.h"
-#else
-#import "OauthEssentials-Swift.h"
-#endif
+
 
 @implementation OauthEssentials {
   OauthEssentialsModule *_sModule;
 }
 
-// Init
 - (instancetype)init
 {
   self = [super init];
@@ -21,14 +16,12 @@
   return self;
 }
 
-// TurboModule
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {
   return std::make_shared<facebook::react::NativeOauthEssentialsSpecJSI>(params);
 }
 
-// Module name
 + (NSString *)moduleName
 {
   return @"OauthEssentials";
@@ -72,8 +65,9 @@
 - (void)getPassword:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject
 {
-  [_sModule getPasswordWithResolver:resolve
+  [_sModule getPassword:resolve
                             rejecter:reject];
 }
+
 
 @end

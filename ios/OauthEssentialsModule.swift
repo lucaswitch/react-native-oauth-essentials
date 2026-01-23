@@ -8,21 +8,12 @@ import UIKit
 @objcMembers public class OauthEssentialsModule: NSObject,
   ASAuthorizationControllerDelegate,
   ASAuthorizationControllerPresentationContextProviding {
-
-  private var resolve: RCTPromiseResolveBlock?
-  private var reject: RCTPromiseRejectBlock?
+  private var _password_retriever: PasswordRetriever? = nil
 
   enum CredentialsType: String {
     case googleId = "GOOGLE_ID"
     case password = "PASSWORD"
     case appleId = "APPLE_ID"
-  }
-
-  enum CredentialError: String {
-    case noSignInAvailable = "NO_SIGN_IN_AVAILABLE"
-    case invalidResult = "INVALID_RESULT_ERROR"
-    case simultaneousCallError = "SIMULTANEOUS_CALL_ERROR"
-    case notSupportedError = "NOT_SUPPORTED_ERROR"
   }
 
   @objc(requiresMainQueueSetup)
@@ -138,8 +129,8 @@ import UIKit
 
   @objc(appleSignIn:rejecter:)
   public func appleSignIn(
-  resolve: @escaping RCTPromiseResolveBlock,
-  rejecter reject: @escaping RCTPromiseRejectBlock
+    resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
     guard self.reject == nil else {
       reject(
@@ -173,15 +164,19 @@ import UIKit
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    reject(CredentialError.notSupportedError.rawValue, "Password sign-in is not supported on iOS via this method. Use getPassword instead.", nil)
+    reject(
+      RCTPromiseSettler.CredentialError.invalidResult.rawValue,
+      "passwordSignIn is not available on iOS. Instead, ensure your username and password fields are properly marked in your UI so that iOS can save them as credentials. These saved credentials can then be retrieved later using the getCredentials method.",
+      nil
+    )
   }
 
   @objc
   public func getPassword(
-    resolver resolve: @escaping RCTPromiseResolveBlock,
+    _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-      guard self.reject == nil else {
+      if password_retriever != nil && !password_retriever!.settled() {
         reject(
           CredentialError.simultaneousCallError.rawValue,
           "Another sign-in operation is in progress",
@@ -189,22 +184,29 @@ import UIKit
         )
         return
       }
-      self.resolve = resolve
-      self.reject = reject
-
-      let controller = ASAuthorizationController(authorizationRequests: [
-        ASAuthorizationPasswordProvider().createRequest()
-      ])
-
-      controller.delegate = self
-      controller.presentationContextProvider = self
-
-      if #available(iOS 16.0, *) {
-        controller.performRequests(options: .preferImmediatelyAvailableCredentials)
-      } else {
-        controller.performRequests()
-      }
+      self._password_retriever = PasswordRetriever(resolve, reject)
   }
+
+  func accountAuthenticationModificationController(
+  _ controller: ASAccountAuthenticationModificationController,
+  didSuccessfullyCompleteRequest request: ASAccountAuthenticationModificationRequest,
+  withUserInfo userInfo: [AnyHashable : Any]?
+  ) {
+    self.resolve?(true)
+  }
+
+  func accountAuthenticationModificationController(
+  _ controller: ASAccountAuthenticationModificationController,
+  didFailRequest request: ASAccountAuthenticationModificationRequest,
+  withError error: Error
+  ) {
+    self.reject?(
+      CredentialError.invalidResult.rawValue,
+      error.localizedDescription,
+      error
+    )
+  }
+
 
   public func authorizationController(
     controller: ASAuthorizationController,
@@ -273,9 +275,9 @@ import UIKit
   ) -> ASPresentationAnchor {
       guard let scene = UIApplication.shared.connectedScenes
       .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-      let window = scene.windows.first(where: { $0.isKeyWindow })
+         let window = scene.windows.first(where: { $0.isKeyWindow })
       else {
-      return UIWindow()
+         return UIWindow()
       }
 
       return window
