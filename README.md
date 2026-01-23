@@ -1,7 +1,3 @@
----
-sidebar_position: 1
----
-
 # About
 
 **React Native OAuth Essentials** is an essential OAuth solution for React Native apps. It provides **up-to-date Google
