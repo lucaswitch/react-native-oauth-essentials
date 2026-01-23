@@ -12,7 +12,7 @@ API. It's a must-have for every React Native app.
 
 [Installation](./installation.md)
 
-[Usage](./usage)
+[Usage](./usage/hybrid.md)
 
 ## Short history
 
