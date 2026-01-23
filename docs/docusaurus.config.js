@@ -20,7 +20,7 @@ const config = {
   },
 
   url: 'https://lucaswitch.github.io',
-  baseUrl: '/react-native-oauth-essentials',
+  baseUrl: '/react-native-oauth-essentials/',
   organizationName: 'lucaswitch', // Usually your GitHub org/user name.
   projectName: 'react-native-oauth-essentials', // Usually your repo name.
   trailingSlash: false,
