@@ -20,11 +20,12 @@ const config = {
   },
 
   url: 'https://lucaswitch.github.io',
-  baseUrl: '/react-native-oauth-essentials/docs/',
-  organizationName: 'lucaswitch', // Usually your GitHub org/user name.
-  projectName: 'react-native-oauth-essentials', // Usually your repo name.
-  trailingSlash: false,
+  baseUrl: '/react-native-oauth-essentials/',
   onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'warn',
+  organizationName: 'lucaswitch', // GitHub username
+  projectName: 'react-native-oauth-essentials', // Repo name
+  deploymentBranch: 'gh-pages', // optional, default is 'gh-pages'
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
