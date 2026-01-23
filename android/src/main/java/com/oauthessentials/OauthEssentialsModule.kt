@@ -26,7 +26,6 @@ import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.util.Base64
 
-
 class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   NativeOauthEssentialsSpec(reactContext) {
 
@@ -42,9 +41,9 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   }
 
   @SuppressLint("ObsoleteSdkInt")
-  override fun getTypedExportedConstants(): MutableMap<String, Any> {
+  override fun getTypedExportedConstants(): MutableMap<String, Boolean> {
     val hasGoogleServices = hasGooglePlayServices()
-    val constants: MutableMap<String, Any> = mutableMapOf(
+    val constants: MutableMap<String, Boolean> = mutableMapOf(
       "GOOGLE_PLAY_SERVICES_SUPPORTED" to hasGoogleServices,
       "PASSWORD_SUPPORTED" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M),
       "GOOGLE_ID_SUPPORTED" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && hasGoogleServices),
@@ -53,9 +52,8 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     return constants
   }
 
-
   @RequiresApi(Build.VERSION_CODES.O)
-  override fun signIn(clientId: String, options: ReadableMap, promise: Promise) {
+  override fun hybridSignIn(clientId: String, options: ReadableMap, promise: Promise) {
     if (!hasGooglePlayServices()) {
       promise.reject(
         CredentialError.NOT_SUPPORTED_ERROR.code,
@@ -104,7 +102,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
-  override fun appleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
+  override fun appleSignIn(promise: Promise) {
     promise.reject(
       CredentialError.NOT_SUPPORTED_ERROR.code,
       "Apple sign in is not supported on Android yet."

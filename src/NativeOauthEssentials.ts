@@ -1,4 +1,4 @@
-import { TurboModuleRegistry, type TurboModule } from 'react-native';
+import { type TurboModule, TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
   getConstants(): {
@@ -15,6 +15,8 @@ export interface Spec extends TurboModule {
   passwordSignIn(username: string, password: string): Promise<boolean>;
 
   getPassword(): Promise<Object>;
+
+  hybridSignIn(googleClientId: string, options: Object): Promise<Object>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('OauthEssentials');

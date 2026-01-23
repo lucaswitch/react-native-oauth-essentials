@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # About
 
 **React Native OAuth Essentials** is an essential OAuth solution for React Native apps. It provides **up-to-date Google
@@ -8,7 +12,7 @@ API. It's a must-have for every React Native app.
 
 [Installation](./installation.md)
 
-[Usage](./usage)
+[Usage](./usage/hybrid.md)
 
 ## Short history
 
@@ -27,4 +31,3 @@ make me want to throw my laptop out the window?
 ## Philosophy
 
 Free forever, up-to-date features, and focused only on the essentials your mobile app really needs.
-

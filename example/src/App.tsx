@@ -1,16 +1,21 @@
-import { View, StyleSheet, Button, Alert, Text, TextInput } from 'react-native';
+import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
-  getPassword,
-  googleSignIn,
-  passwordSignIn,
+  APPLE_ID_SUPPORTED,
   appleSignIn,
+  getPassword,
+  GOOGLE_ID_SUPPORTED,
+  googleSignIn,
+  hybridSignIn,
+  PASSWORD_SUPPORTED,
+  passwordSignIn,
+} from 'react-native-oauth-essentials';
+import { useEffect, useState } from 'react';
+
+console.log('PLATFORM AVAILABILITY', {
   GOOGLE_ID_SUPPORTED,
   PASSWORD_SUPPORTED,
   APPLE_ID_SUPPORTED,
-} from 'react-native-oauth-essentials';
-import { useState } from 'react';
-
-console.log({ GOOGLE_ID_SUPPORTED, PASSWORD_SUPPORTED, APPLE_ID_SUPPORTED });
+});
 
 // Replace with your own OAuth Android Client ID for Android on page: https://console.cloud.google.com/auth/clients
 const OAUTH_ANDROID_GOOGLE =
@@ -65,6 +70,12 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    hybridSignIn(OAUTH_ANDROID_GOOGLE)
+      .then((result) => console.log('success', result))
+      .catch(console.error);
+  }, []);
+
   return (
     <View style={styles.container}>
       {signInMenu ? (
@@ -85,9 +96,18 @@ export default function App() {
       ) : (
         <>
           <Text>Open up console to see results!</Text>
-          <Button title="Google OAuth Sign-In" onPress={onGoogleSignInPress} />
-          <Button title="Apple Sign-In" onPress={onAppleSignInPress} />
-          <Button title="Password Sign-In" onPress={onPasswordSignInPress} />
+          {GOOGLE_ID_SUPPORTED && (
+            <Button
+              title="Google OAuth Sign-In"
+              onPress={onGoogleSignInPress}
+            />
+          )}
+          {APPLE_ID_SUPPORTED && (
+            <Button title="Apple Sign-In" onPress={onAppleSignInPress} />
+          )}
+          {PASSWORD_SUPPORTED && (
+            <Button title="Password Sign-In" onPress={onPasswordSignInPress} />
+          )}
         </>
       )}
     </View>
@@ -102,6 +122,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: {
+    minWidth: 200,
+  },
+  button: {
     minWidth: 200,
   },
 });
