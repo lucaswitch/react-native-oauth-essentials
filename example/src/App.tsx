@@ -81,13 +81,20 @@ export default function App() {
       {signInMenu ? (
         <>
           <TextInput
+            value={username}
             onChangeText={(text) => setUsername(text)}
             placeholder="Username"
+            textContentType="username"
+            autoComplete="username"
             style={styles.input}
           />
           <TextInput
+            value={password}
             onChangeText={(text) => setPassword(text)}
             placeholder="Password"
+            textContentType="password"
+            autoComplete="password"
+            secureTextEntry={true}
             style={styles.input}
           />
           <Button title="Go back" onPress={() => setSignInMenu(false)} />
@@ -108,6 +115,10 @@ export default function App() {
           {PASSWORD_SUPPORTED && (
             <Button title="Password Sign-In" onPress={onPasswordSignInPress} />
           )}
+          <Button
+            title="Show Sign-In Menu"
+            onPress={() => setSignInMenu(true)}
+          />
         </>
       )}
     </View>
@@ -122,7 +133,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: {
-    minWidth: 200,
+    minWidth: 300,
+    height: 40,
+    backgroundColor: '#e1e1e1',
+    paddingLeft: 10,
+    paddingRight: 10,
   },
   button: {
     minWidth: 200,

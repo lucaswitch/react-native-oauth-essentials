@@ -1,11 +1,11 @@
 import React
 import AuthenticationServices
 
-class PasswordRetriever: RCTPromiseSettler,
+public class PasswordRetriever: RCTPromiseSettler,
   ASAuthorizationControllerDelegate,
   ASAuthorizationControllerPresentationContextProviding {
 
-  init(
+  override init(
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock) {
     super.init(resolve: resolve, reject: reject)
@@ -21,7 +21,7 @@ class PasswordRetriever: RCTPromiseSettler,
     }
   }
 
-  func authorizationController(
+  public func authorizationController(
     controller: ASAuthorizationController,
     didCompleteWithAuthorization authorization: ASAuthorization
   ) {
@@ -35,7 +35,7 @@ class PasswordRetriever: RCTPromiseSettler,
     }
   }
 
-  func authorizationController(
+  public func authorizationController(
     controller: ASAuthorizationController,
     didCompleteWithError error: Error
   ) {
@@ -47,16 +47,11 @@ class PasswordRetriever: RCTPromiseSettler,
     cleanup()
   }
 
-  func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+  public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
     return UIWindow()
   }
 
   func getIsSettled() -> Bool {
     return resolve == nil || reject == nil
-  }
-
-  private func cleanup() {
-    resolve = nil
-    reject = nil
   }
 }

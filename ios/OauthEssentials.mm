@@ -70,4 +70,12 @@
 }
 
 
+- (void)hybridSignIn:(NSString *)clientId
+             options:(NSDictionary *)options
+             resolve:(RCTPromiseResolveBlock)resolve
+             reject:(RCTPromiseRejectBlock)reject
+{
+  [_sModule hybridSignIn:clientId options:options resolver:resolve rejecter:reject];
+}
+
 @end

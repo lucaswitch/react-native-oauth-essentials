@@ -1,6 +1,8 @@
-class RCTPromiseSettler {
-  internal let resolve: RCTPromiseResolveBlock?
-  internal let reject: RCTPromiseRejectBlock?
+import React
+
+public class RCTPromiseSettler: NSObject {
+  internal var resolve: RCTPromiseResolveBlock?
+  internal var reject: RCTPromiseRejectBlock?
 
   public enum CredentialError: String {
     case noSignInAvailable = "NO_SIGN_IN_AVAILABLE"
@@ -10,19 +12,19 @@ class RCTPromiseSettler {
   }
 
   init(
-    resolve: RCTPromiseResolveBlock,
-    reject: RCTPromiseRejectBlock
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock
   ) {
     self.resolve = resolve
     self.reject = reject
   }
 
-  func settled() {
+  public func settled() -> Bool {
     return self.resolve == nil && self.reject == nil
   }
 
-  private func cleanup() {
+  internal func cleanup() -> Void {
     self.resolve = nil
-    slef.reject = nil
+    self.reject = nil
   }
 }
