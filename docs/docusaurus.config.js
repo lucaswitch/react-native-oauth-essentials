@@ -24,7 +24,7 @@ const config = {
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   organizationName: 'lucaswitch', // GitHub username
-  projectName: 'react-native-oauth-essentials', // Repo name
+  projectName: 'react-native-oauth-essentials',
   deploymentBranch: 'gh-pages',
 
   i18n: {
