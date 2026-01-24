@@ -3,12 +3,25 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'ios/**'
+      - 'android/**'
+      - 'src/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'ios/**'
+      - 'android/**'
+      - 'src/**'
   merge_group:
     types:
       - checks_requested
+    paths:
+      - 'ios/**'
+      - 'android/**'
+      - 'src/**'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
