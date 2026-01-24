@@ -1,27 +1,41 @@
-deploy:
-  runs-on: ubuntu-latest
+name: Deploy Docs
 
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: yarn
-        cache-dependency-path: docs/yarn.lock
+permissions:
+  contents: write
 
-    - name: Install dependencies
-      working-directory: docs
-      run: yarn install --frozen-lockfile
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-    - name: Build Docusaurus
-      working-directory: docs
-      run: yarn build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/build
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: docs/yarn.lock
+
+      - name: Install dependencies
+        working-directory: docs
+        run: yarn install --frozen-lockfile
+
+      - name: Build Docusaurus
+        working-directory: docs
+        run: yarn build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/build
