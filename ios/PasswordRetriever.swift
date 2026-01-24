@@ -1,0 +1,57 @@
+import React
+import AuthenticationServices
+
+public class PasswordRetriever: RCTPromiseSettler,
+  ASAuthorizationControllerDelegate,
+  ASAuthorizationControllerPresentationContextProviding {
+
+  override init(
+    resolve: @escaping RCTPromiseResolveBlock,
+    reject: @escaping RCTPromiseRejectBlock) {
+    super.init(resolve: resolve, reject: reject)
+
+    let request = ASAuthorizationPasswordProvider().createRequest()
+    let controller = ASAuthorizationController(authorizationRequests: [request])
+    controller.delegate = self
+    controller.presentationContextProvider = self
+    if #available(iOS 16.0, *) {
+      controller.performRequests(options: .preferImmediatelyAvailableCredentials)
+    } else {
+      controller.performRequests()
+    }
+  }
+
+  public func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithAuthorization authorization: ASAuthorization
+  ) {
+    if let credential = authorization.credential as? ASPasswordCredential {
+      let result = [
+        "username": credential.user,
+        "password": credential.password
+      ]
+      resolve?(result)
+      cleanup()
+    }
+  }
+
+  public func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithError error: Error
+  ) {
+    reject?(
+      CredentialError.invalidResult.rawValue,
+      error.localizedDescription,
+      error
+    )
+    cleanup()
+  }
+
+  public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    return UIWindow()
+  }
+
+  func getIsSettled() -> Bool {
+    return resolve == nil || reject == nil
+  }
+}
