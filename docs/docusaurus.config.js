@@ -25,7 +25,7 @@ const config = {
   onBrokenMarkdownLinks: 'warn',
   organizationName: 'lucaswitch', // GitHub username
   projectName: 'react-native-oauth-essentials', // Repo name
-  deploymentBranch: 'gh-pages', // optional, default is 'gh-pages'
+  deploymentBranch: 'gh-pages',
 
   i18n: {
     defaultLocale: 'en',
