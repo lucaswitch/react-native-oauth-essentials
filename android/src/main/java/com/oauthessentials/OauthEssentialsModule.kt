@@ -1,9 +1,13 @@
 package com.oauthessentials
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -47,7 +51,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       "GOOGLE_PLAY_SERVICES_SUPPORTED" to hasGoogleServices,
       "PASSWORD_SUPPORTED" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M),
       "GOOGLE_ID_SUPPORTED" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && hasGoogleServices),
-      "APPLE_ID_SUPPORTED" to false
+      "APPLE_ID_SUPPORTED" to true
     )
     return constants
   }
@@ -102,11 +106,49 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
-  override fun appleSignIn(promise: Promise) {
-    promise.reject(
-      CredentialError.NOT_SUPPORTED_ERROR.code,
-      "Apple sign in is not supported on Android yet."
-    )
+  override fun appleSignIn(appleIdentifier: String?, promise: Promise) {
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        if (appleIdentifier !is String || appleIdentifier.isEmpty()) {
+          promise.reject(
+            CredentialError.NOT_SUPPORTED_ERROR.code,
+            "Android apps need the apple identifier to enable apple sign-in."
+          )
+        } else {
+          val bytes = ByteArray(32)
+          SecureRandom().nextBytes(bytes)
+          val state = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+
+          val packageName = reactApplicationContext.packageName
+          val redirectUri = "oauth://$packageName"
+          Log.e(LOG_TAG, "OAuth redirect uri: $redirectUri")
+
+          val url = "https://appleid.apple.com/auth/authorize".toUri()
+            .buildUpon()
+            .appendQueryParameter("client_id", appleIdentifier)
+            .appendQueryParameter("redirect_uri", redirectUri)
+            .appendQueryParameter("response_type", "code")
+            .appendQueryParameter("scope", "name email")
+            .appendQueryParameter("response_mode", "form_post")
+            .appendQueryParameter("state", state)
+            .build()
+
+          val activity = reactApplicationContext.currentActivity
+          if (activity is Activity) {
+            CustomTabsIntent.Builder().build().launchUrl(activity, url)
+            val intent = Intent(activity, AppleOAuthActivity::class.java)
+              .apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+              }
+            activity.startActivity(intent)
+          } else {
+            throw Error("No browser found into the device.")
+          }
+        }
+      } catch (e: Throwable) {
+        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
+      }
+    }
   }
 
   /**
@@ -127,7 +169,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       return
     }
 
-    CoroutineScope(Dispatchers.Main).launch {
+    CoroutineScope(Dispatchers.IO).launch {
       try {
         val manager = CredentialManager.create(activity)
         val randomBytes = ByteArray(32)
@@ -170,7 +212,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       return
     }
 
-    CoroutineScope(Dispatchers.Main).launch {
+    CoroutineScope(Dispatchers.IO).launch {
       try {
         val manager = CredentialManager.create(activity)
         val request = GetCredentialRequest(
@@ -202,7 +244,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       return
     }
 
-    CoroutineScope(Dispatchers.Main).launch {
+    CoroutineScope(Dispatchers.IO).launch {
       try {
         val manager = CredentialManager.create(activity)
         val request = CreatePasswordRequest(

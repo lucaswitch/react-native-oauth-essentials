@@ -10,7 +10,7 @@ export interface Spec extends TurboModule {
 
   googleSignIn(clientId: string, options: Object): Promise<Object>;
 
-  appleSignIn(): Promise<Object>;
+  appleSignIn(appleIdentifier?: string): Promise<Object>;
 
   passwordSignIn(username: string, password: string): Promise<boolean>;
 

@@ -58,8 +58,15 @@ export async function passwordSignIn(
 /**
  * Performs the apple sign in.
  */
-export async function appleSignIn(): Promise<AppleIdCredentialResult> {
-  return (await OauthEssentials.appleSignIn()) as AppleIdCredentialResult;
+export async function appleSignIn(
+  appleIdentifier?: string
+): Promise<AppleIdCredentialResult> {
+  return (await OauthEssentials.appleSignIn(
+    Platform.select({
+      android: appleIdentifier,
+      ios: undefined,
+    })
+  )) as AppleIdCredentialResult;
 }
 
 /**
