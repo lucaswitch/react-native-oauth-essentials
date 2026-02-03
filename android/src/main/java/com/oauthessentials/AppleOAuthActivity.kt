@@ -1,47 +1,37 @@
 package com.oauthessentials
 
 import android.app.Activity
-import android.net.Uri
 import android.os.Bundle
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
 
 class AppleOAuthActivity : Activity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    val uri: Uri? = intent?.data
-    if (uri != null) {
-      handleOAuthCallback(uri)
-    } else {
-      finish()
-    }
-  }
+    intent.getStringExtra("appId")
+    val clientId = intent.getStringExtra("clientId")
+    val redirectUrl = intent.getStringExtra("redirectUrl")
+    val nonce = intent.getStringExtra("nonce")
+    val state = intent.getStringExtra("state")
 
-  private fun handleOAuthCallback(uri: Uri) {
-    val code = uri.getQueryParameter("code")
-    val state = uri.getQueryParameter("state")
-    val error = uri.getQueryParameter("error")
+    val uri = "https://appleid.apple.com/auth/authorize".toUri()
+      .buildUpon()
+      .appendQueryParameter("client_id", clientId)
+      .appendQueryParameter("redirect_uri", redirectUrl)
+      .appendQueryParameter("nonce", nonce)
+      .appendQueryParameter("state", state)
+      .appendQueryParameter("response_type", "code")
+      .appendQueryParameter("response_mode", "form_post")
+      .appendQueryParameter("scope", "name email")
+      .build()
 
-    when {
-      error != null -> {
-        notifyError(error)
-      }
+    val customTabsIntent = CustomTabsIntent.Builder()
+      .setShowTitle(true)
+      .build()
 
-      code != null -> {
-        processAuthCode(code, state)
-      }
+    customTabsIntent.launchUrl(this, uri)
 
-      else -> {
-        notifyError("Invalid callback")
-      }
-    }
-
-    finish()
-  }
-
-  private fun processAuthCode(code: String, state: String?) {
-  }
-
-  private fun notifyError(error: String) {
   }
 }

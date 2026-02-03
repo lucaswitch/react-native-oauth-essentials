@@ -59,11 +59,26 @@ export async function passwordSignIn(
  * Performs the apple sign in.
  */
 export async function appleSignIn(
-  appleIdentifier?: string
+  appleIdentifier?: string,
+  redirectUrl?: string
 ): Promise<AppleIdCredentialResult> {
+  if (Platform.OS === 'android') {
+    if (!redirectUrl) {
+      throw new Error('"redirectUrl" is required for apple sign in on android');
+    } else if (!appleIdentifier) {
+      throw new Error(
+        '"appleIdentifier" is required for apple sign in on android'
+      );
+    }
+  }
+
   return (await OauthEssentials.appleSignIn(
     Platform.select({
       android: appleIdentifier,
+      ios: undefined,
+    }),
+    Platform.select({
+      android: redirectUrl,
       ios: undefined,
     })
   )) as AppleIdCredentialResult;

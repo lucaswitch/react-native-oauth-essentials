@@ -6,8 +6,6 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.core.net.toUri
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -20,6 +18,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -29,9 +28,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.UUID
 
 class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   NativeOauthEssentialsSpec(reactContext) {
+
+  private val onCredentialReceived = "onCredentialReceived"
 
   enum class CredentialsType(val code: String) {
     GOOGLE_ID("GOOGLE_ID"),
@@ -65,6 +67,103 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       )
       return
     }
+
+    val activity = reactApplicationContext.currentActivity
+    if (activity == null) {
+      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
+      return
+    }
+
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val manager = CredentialManager.create(activity)
+        val randomBytes = ByteArray(32)
+        SecureRandom.getInstanceStrong().nextBytes(randomBytes)
+        val randomNonce = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes)
+
+        val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
+          .setNonce(randomNonce)
+          .setServerClientId(clientId)
+          .setFilterByAuthorizedAccounts(options.getBoolean("authorizedAccounts"))
+          .setAutoSelectEnabled(options.getBoolean("autoSelectEnabled"))
+          .build()
+
+        val request: GetCredentialRequest = GetCredentialRequest.Builder()
+          .addCredentialOption(googleIdOption)
+          .addCredentialOption(GetPasswordOption())
+          .build()
+
+        val result = getCredentialResultToWritableMap(
+          manager.getCredential(
+            request = request,
+            context = activity
+          )
+        )
+        promise.resolve(result)
+        raiseJsEvent(onCredentialReceived, result)
+      } catch (e: Throwable) {
+        Log.e(LOG_TAG, e.toString())
+        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
+      }
+    }
+  }
+
+  @RequiresApi(Build.VERSION_CODES.O)
+  override fun appleSignIn(appleIdentifier: String?, redirectUrl: String?, promise: Promise) {
+    if (appleIdentifier !is String || appleIdentifier.isEmpty()) {
+      promise.reject(
+        CredentialError.NOT_SUPPORTED_ERROR.code,
+        "Android apps need the apple identifier to enable apple sign-in."
+      )
+      return
+    }
+    if (redirectUrl !is String || redirectUrl.isEmpty()) {
+      promise.reject(
+        CredentialError.NOT_SUPPORTED_ERROR.code,
+        "Android apps need the redirectUrl to enable apple sign-in."
+      )
+      return
+    }
+
+    this.reactApplicationContext.packageName
+    val activity = reactApplicationContext.currentActivity
+    try {
+      if (activity is Activity) {
+        val state = UUID.randomUUID().toString()
+        val nonce = UUID.randomUUID().toString()
+
+        var intent = Intent(activity, AppleOAuthActivity::class.java)
+          .apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra("redirectUrl", redirectUrl)
+            putExtra("clientId", appleIdentifier)
+            putExtra("state", state)
+            putExtra("nonce", nonce)
+          }
+
+        activity.runOnUiThread {
+          activity.startActivity(intent)
+        }
+      } else {
+        throw Error("No browser found into the device.")
+      }
+    } catch (e: Throwable) {
+      promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
+    }
+  }
+
+  /**
+   * Performs the google sign in.
+   */
+  @RequiresApi(Build.VERSION_CODES.O)
+  override fun googleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
+    if (!hasGooglePlayServices()) {
+      promise.reject(
+        CredentialError.NOT_SUPPORTED_ERROR.code,
+        "Device does not have GooglePlay Services"
+      )
+      return
+    }
     val activity = reactApplicationContext.currentActivity
     if (activity == null) {
       promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
@@ -87,116 +186,15 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
 
         val request: GetCredentialRequest = GetCredentialRequest.Builder()
           .addCredentialOption(googleIdOption)
-          .addCredentialOption(GetPasswordOption())
           .build()
 
-        promise.resolve(
-          getCredentialResultToWritableMap(
-            manager.getCredential(
-              request = request,
-              context = activity
-            )
-          )
+
+        val result = getCredentialResultToWritableMap(
+          manager.getCredential(activity, request)
         )
+        promise.resolve(result)
+        raiseJsEvent(onCredentialReceived, result)
       } catch (e: Throwable) {
-        Log.e(LOG_TAG, e.toString())
-        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e.toString())
-      }
-    }
-  }
-
-  @RequiresApi(Build.VERSION_CODES.O)
-  override fun appleSignIn(appleIdentifier: String?, promise: Promise) {
-    CoroutineScope(Dispatchers.IO).launch {
-      try {
-        if (appleIdentifier !is String || appleIdentifier.isEmpty()) {
-          promise.reject(
-            CredentialError.NOT_SUPPORTED_ERROR.code,
-            "Android apps need the apple identifier to enable apple sign-in."
-          )
-        } else {
-          val bytes = ByteArray(32)
-          SecureRandom().nextBytes(bytes)
-          val state = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-
-          val packageName = reactApplicationContext.packageName
-          val redirectUri = "oauth://$packageName"
-          Log.e(LOG_TAG, "OAuth redirect uri: $redirectUri")
-
-          val url = "https://appleid.apple.com/auth/authorize".toUri()
-            .buildUpon()
-            .appendQueryParameter("client_id", appleIdentifier)
-            .appendQueryParameter("redirect_uri", redirectUri)
-            .appendQueryParameter("response_type", "code")
-            .appendQueryParameter("scope", "name email")
-            .appendQueryParameter("response_mode", "form_post")
-            .appendQueryParameter("state", state)
-            .build()
-
-          val activity = reactApplicationContext.currentActivity
-          if (activity is Activity) {
-            CustomTabsIntent.Builder().build().launchUrl(activity, url)
-            val intent = Intent(activity, AppleOAuthActivity::class.java)
-              .apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-              }
-            activity.startActivity(intent)
-          } else {
-            throw Error("No browser found into the device.")
-          }
-        }
-      } catch (e: Throwable) {
-        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
-      }
-    }
-  }
-
-  /**
-   * Performs the google sign in.
-   */
-  @RequiresApi(Build.VERSION_CODES.O)
-  override fun googleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
-    if (!hasGooglePlayServices()) {
-      promise.reject(
-        CredentialError.NOT_SUPPORTED_ERROR.code,
-        "Device does not have GooglePlay Services"
-      )
-      return
-    }
-    val activity = reactApplicationContext.currentActivity
-    if (activity == null) {
-      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
-      return
-    }
-
-    CoroutineScope(Dispatchers.IO).launch {
-      try {
-        val manager = CredentialManager.create(activity)
-        val randomBytes = ByteArray(32)
-        SecureRandom.getInstanceStrong().nextBytes(randomBytes)
-        val randomNonce = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes)
-
-        val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
-          .setNonce(randomNonce)
-          .setServerClientId(clientId)
-          .setFilterByAuthorizedAccounts(options.getBoolean("authorizedAccounts"))
-          .setAutoSelectEnabled(options.getBoolean("autoSelectEnabled"))
-          .build()
-
-        val request: GetCredentialRequest = GetCredentialRequest.Builder()
-          .addCredentialOption(googleIdOption)
-          .build()
-
-        promise.resolve(
-          getCredentialResultToWritableMap(
-            manager.getCredential(
-              request = request,
-              context = activity
-            )
-          )
-        )
-      } catch (e: Throwable) {
-        Log.e(LOG_TAG, e.toString())
         promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e.toString())
       }
     }
@@ -219,14 +217,14 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           listOf(GetPasswordOption())
         )
 
-        promise.resolve(
-          getCredentialResultToWritableMap(
-            manager.getCredential(
-              request = request,
-              context = activity
-            )
+        val result = getCredentialResultToWritableMap(
+          manager.getCredential(
+            request = request,
+            context = activity
           )
         )
+        promise.resolve(result)
+        raiseJsEvent(onCredentialReceived, result)
       } catch (e: Throwable) {
         Log.e(LOG_TAG, e.toString())
         promise.resolve(false)
@@ -317,6 +315,15 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     val result = GoogleApiAvailability.getInstance()
       .isGooglePlayServicesAvailable(reactApplicationContext)
     return result == ConnectionResult.SUCCESS
+  }
+
+  /**
+   * Raises the js event.
+   */
+  private fun raiseJsEvent(eventName: String, data: WritableMap?) {
+    this.reactApplicationContext
+      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+      .emit(eventName, data)
   }
 
   companion object {

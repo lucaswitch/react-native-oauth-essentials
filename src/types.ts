@@ -26,7 +26,9 @@ export type GoogleIdCredentialResult = {
 
 export type AppleIdCredentialResult = {
   type: CredentialsType.APPLE_ID;
-  data: {};
+  data: {
+    idToken: string;
+  };
 };
 
 export enum CredentialsType {

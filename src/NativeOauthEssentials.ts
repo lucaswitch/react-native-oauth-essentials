@@ -1,4 +1,8 @@
-import { type TurboModule, TurboModuleRegistry } from 'react-native';
+import {
+  type CodegenTypes,
+  type TurboModule,
+  TurboModuleRegistry,
+} from 'react-native';
 
 export interface Spec extends TurboModule {
   getConstants(): {
@@ -8,15 +12,17 @@ export interface Spec extends TurboModule {
     readonly APPLE_ID_SUPPORTED: boolean;
   };
 
-  googleSignIn(clientId: string, options: Object): Promise<Object>;
+  googleSignIn(webClientId: string, options: Object): Promise<Object>;
 
-  appleSignIn(appleIdentifier?: string): Promise<Object>;
+  appleSignIn(appleIdentifier?: string, redirectUrl?: string): Promise<Object>;
 
   passwordSignIn(username: string, password: string): Promise<boolean>;
 
   getPassword(): Promise<Object>;
 
   hybridSignIn(googleClientId: string, options: Object): Promise<Object>;
+
+  readonly onCredentialReceived: CodegenTypes.EventEmitter<Object>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('OauthEssentials');

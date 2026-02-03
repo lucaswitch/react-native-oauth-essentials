@@ -14,8 +14,7 @@
 
         <data
           android:host="${applicationId}"
-          android:pathPrefix="/apple-callback"
-          android:scheme="oauth" />
+          android:scheme="apple-remotemanagement-user-login" />
       </intent-filter>
     </activity>
   </application>
