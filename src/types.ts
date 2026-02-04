@@ -24,6 +24,11 @@ export type GoogleIdCredentialResult = {
   };
 };
 
+export type CancelledCredentialResult = {
+  type: CredentialsType.CANCELLED;
+  data: null;
+};
+
 export type AppleIdCredentialResult = {
   type: CredentialsType.APPLE_ID;
   data: {
@@ -31,10 +36,17 @@ export type AppleIdCredentialResult = {
   };
 };
 
+export type WebAppleIdCredentialResult<T> = {
+  type: CredentialsType.WEB_APPLE_ID;
+  data: T;
+};
+
 export enum CredentialsType {
-  GOOGLE_ID = 'GOOGLE_ID',
-  PASSWORD = 'PASSWORD',
-  APPLE_ID = 'APPLE_ID',
+  GOOGLE_ID = 'GOOGLE_ID', // GoogleId credentials type
+  PASSWORD = 'PASSWORD', // Password credentials type
+  APPLE_ID = 'APPLE_ID', // IOS AppleId credentials type
+  WEB_APPLE_ID = 'WEB_APPLE_ID', // Android AppleId credentials type
+  CANCELLED = 'CANCELLED', // type when the user cancels it
 }
 
 export enum CredentialError {

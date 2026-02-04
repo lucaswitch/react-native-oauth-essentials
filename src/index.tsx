@@ -2,9 +2,11 @@ import OauthEssentials from './NativeOauthEssentials';
 import { Platform } from 'react-native';
 import type {
   AppleIdCredentialResult,
+  CancelledCredentialResult,
   GoogleIdCredentialResult,
   GoogleSignInOptions,
   PasswordCredentialResult,
+  WebAppleIdCredentialResult,
 } from './types';
 
 export * from './types';
@@ -20,7 +22,7 @@ export * from './types';
 export async function googleSignIn(
   webClientId: string,
   options?: GoogleSignInOptions
-): Promise<GoogleIdCredentialResult> {
+): Promise<GoogleIdCredentialResult | CancelledCredentialResult> {
   return (await OauthEssentials.googleSignIn(
     webClientId,
     parseGoogleIdOptions(options)
@@ -56,32 +58,50 @@ export async function passwordSignIn(
 }
 
 /**
- * Performs the apple sign in.
+ * Initiates the Apple Sign-In process.
+ * On IOS devices it handles it smoothly using the latest UI workflow.
+ * On Android it dispatches the androidWebUrl to device default browser for handling it.
+ * you need to implement on your backend the redirect logic and validation accordingly to the link below
+ * @see [Apple Sign In REST API Documentation](https://developer.apple.com/documentation/signinwithapplerestapi)
+ *
+ * @param {string} androidWebUrl - The web URL on Android where the user will complete the OAuth flow. **[Android only]**
+ * @param {number} androidWebTimeout - Timeout in milliseconds for the user to complete the OAuth form on Android.
+ *
+ * @returns {AppleIdCredentialResult|WebAppleIdCredentialResult} Returns AppleIdCredentialResult on IOS devices and WebAppleIdCredentialResult on android.
  */
-export async function appleSignIn(
-  appleIdentifier?: string,
-  redirectUrl?: string
-): Promise<AppleIdCredentialResult> {
-  if (Platform.OS === 'android') {
-    if (!redirectUrl) {
-      throw new Error('"redirectUrl" is required for apple sign in on android');
-    } else if (!appleIdentifier) {
-      throw new Error(
-        '"appleIdentifier" is required for apple sign in on android'
-      );
+export async function appleSignIn<WebAppleIdCredentials>(
+  androidWebUrl?: string,
+  androidWebTimeout?: number
+): Promise<
+  AppleIdCredentialResult | WebAppleIdCredentialResult<WebAppleIdCredentials>
+> {
+  if (Platform.OS === 'ios') {
+    return (await OauthEssentials.appleSignIn()) as AppleIdCredentialResult;
+  } else {
+    if (!androidWebUrl?.length) {
+      throw new Error('webUrl cannot be empty on Android');
     }
-  }
+    await OauthEssentials.appleSignIn(androidWebUrl);
 
-  return (await OauthEssentials.appleSignIn(
-    Platform.select({
-      android: appleIdentifier,
-      ios: undefined,
-    }),
-    Platform.select({
-      android: redirectUrl,
-      ios: undefined,
-    })
-  )) as AppleIdCredentialResult;
+    return await new Promise((resolve, reject) => {
+      const subscription = OauthEssentials.onWebAppleCredentialSuccess(
+        (event) => {
+          resolve(event as WebAppleIdCredentialResult<WebAppleIdCredentials>);
+          subscription.remove();
+          clearTimeout(timeoutId);
+        }
+      );
+
+      let timeoutTime = 60 * 5 * 1000;
+      if (typeof androidWebTimeout === 'number' && androidWebTimeout > 0) {
+        timeoutTime = androidWebTimeout;
+      }
+      let timeoutId = setTimeout(() => {
+        subscription.remove();
+        reject(new Error('Could not handle apple sign under 5 minutes.'));
+      }, timeoutTime);
+    });
+  }
 }
 
 /**
@@ -92,7 +112,10 @@ export async function hybridSignIn(
   googleClientId: string,
   options?: GoogleSignInOptions
 ): Promise<
-  AppleIdCredentialResult | GoogleIdCredentialResult | PasswordCredentialResult
+  | AppleIdCredentialResult
+  | GoogleIdCredentialResult
+  | PasswordCredentialResult
+  | CancelledCredentialResult
 > {
   return (await OauthEssentials.hybridSignIn(
     googleClientId,

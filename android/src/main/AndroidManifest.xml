@@ -2,7 +2,7 @@
 
   <application>
     <activity
-      android:name=".AppleOAuthActivity"
+      android:name=".DeepLinkAppleOAuthActivity"
       android:exported="true"
       android:launchMode="singleTask"
       android:theme="@android:style/Theme.Translucent.NoTitleBar">
@@ -13,8 +13,9 @@
         <category android:name="android.intent.category.BROWSABLE" />
 
         <data
-          android:host="${applicationId}"
-          android:scheme="apple-remotemanagement-user-login" />
+          android:host="oauth"
+          android:path="/callback"
+          android:scheme="${applicationId}" />
       </intent-filter>
     </activity>
   </application>

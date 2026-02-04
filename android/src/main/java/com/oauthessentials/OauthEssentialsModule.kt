@@ -1,43 +1,52 @@
 package com.oauthessentials
 
 import android.annotation.SuppressLint
-import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.Uri
 import android.os.Build
 import android.util.Log
+import android.util.Patterns
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
+import androidx.core.view.WindowCompat
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
 import androidx.credentials.GetPasswordOption
-import androidx.credentials.PasswordCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
-import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.util.Base64
-import java.util.UUID
 
 class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   NativeOauthEssentialsSpec(reactContext) {
 
-  private val onCredentialReceived = "onCredentialReceived"
-
-  enum class CredentialsType(val code: String) {
-    GOOGLE_ID("GOOGLE_ID"),
-    PASSWORD("PASSWORD"),
+  private val appleDeepLinkReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      intent?.getStringExtra("url")?.let { url ->
+        Log.d(LOG_TAG, "Handling deep link url: ${url}")
+        val uri = url.toUri()
+        if (!uri.query.isNullOrEmpty()) {
+          emitOnWebAppleCredentialSuccess(CredentialFactory.fromUri(uri))
+        } else {
+          Log.d(LOG_TAG, "Could not handle ${url}, deep link query string is empty")
+        }
+      }
+    }
   }
 
   enum class CredentialError(val code: String) {
@@ -61,16 +70,21 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   @RequiresApi(Build.VERSION_CODES.O)
   override fun hybridSignIn(clientId: String, options: ReadableMap, promise: Promise) {
     if (!hasGooglePlayServices()) {
-      promise.reject(
+      rejectAndEmitEvent(
         CredentialError.NOT_SUPPORTED_ERROR.code,
-        "Device does not have GooglePlay Services"
+        "Device does not have GooglePlay Services",
+        promise
       )
       return
     }
 
     val activity = reactApplicationContext.currentActivity
     if (activity == null) {
-      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
+      rejectAndEmitEvent(
+        CredentialError.NO_ACTIVITY_ERROR.code,
+        "Activity not available",
+        promise
+      )
       return
     }
 
@@ -93,63 +107,59 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           .addCredentialOption(GetPasswordOption())
           .build()
 
-        val result = getCredentialResultToWritableMap(
-          manager.getCredential(
-            request = request,
-            context = activity
-          )
+        resolveAndEmit(
+          CredentialFactory.fromResponse(
+            manager.getCredential(
+              request = request,
+              context = activity
+            )
+          ), promise
         )
-        promise.resolve(result)
-        raiseJsEvent(onCredentialReceived, result)
+      } catch (e: GetCredentialCancellationException) {
+        Log.d(LOG_TAG, e.toString())
+        resolveAndEmit(CredentialFactory.fromCancelled(), promise)
       } catch (e: Throwable) {
-        Log.e(LOG_TAG, e.toString())
-        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
+        Log.d(LOG_TAG, e.toString())
+        rejectAndEmitEvent(
+          CredentialError.INVALID_RESULT_ERROR.code,
+          e,
+          promise
+        )
       }
     }
   }
 
+  /**
+   * Performs the apple sign in.
+   * The signing in is redirecting to the device default browser to handle it.
+   */
   @RequiresApi(Build.VERSION_CODES.O)
-  override fun appleSignIn(appleIdentifier: String?, redirectUrl: String?, promise: Promise) {
-    if (appleIdentifier !is String || appleIdentifier.isEmpty()) {
-      promise.reject(
-        CredentialError.NOT_SUPPORTED_ERROR.code,
-        "Android apps need the apple identifier to enable apple sign-in."
-      )
-      return
-    }
-    if (redirectUrl !is String || redirectUrl.isEmpty()) {
-      promise.reject(
-        CredentialError.NOT_SUPPORTED_ERROR.code,
-        "Android apps need the redirectUrl to enable apple sign-in."
+  override fun appleSignIn(androidWebUrl: String?, promise: Promise) {
+    val activity = this.reactApplicationContext.currentActivity
+    if (activity === null) {
+      rejectAndEmitEvent(
+        CredentialError.NO_ACTIVITY_ERROR.code,
+        "Could not find app activity.",
+        promise
       )
       return
     }
 
-    this.reactApplicationContext.packageName
-    val activity = reactApplicationContext.currentActivity
+    var uri: Uri
     try {
-      if (activity is Activity) {
-        val state = UUID.randomUUID().toString()
-        val nonce = UUID.randomUUID().toString()
-
-        var intent = Intent(activity, AppleOAuthActivity::class.java)
-          .apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra("redirectUrl", redirectUrl)
-            putExtra("clientId", appleIdentifier)
-            putExtra("state", state)
-            putExtra("nonce", nonce)
-          }
-
-        activity.runOnUiThread {
-          activity.startActivity(intent)
-        }
-      } else {
-        throw Error("No browser found into the device.")
-      }
+      uri = parseWebUrl(androidWebUrl)
     } catch (e: Throwable) {
-      promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e)
+      rejectAndEmitEvent(CredentialError.INVALID_RESULT_ERROR.code, e, promise)
+      return
     }
+
+    activity.runOnUiThread {
+      val intent = Intent(Intent.ACTION_VIEW).apply {
+        data = uri
+      }
+      activity.startActivity(intent)
+    }
+    promise.resolve(true)
   }
 
   /**
@@ -158,15 +168,20 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   @RequiresApi(Build.VERSION_CODES.O)
   override fun googleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
     if (!hasGooglePlayServices()) {
-      promise.reject(
+      rejectAndEmitEvent(
         CredentialError.NOT_SUPPORTED_ERROR.code,
-        "Device does not have GooglePlay Services"
+        "Device does not have GooglePlay Services",
+        promise
       )
       return
     }
     val activity = reactApplicationContext.currentActivity
     if (activity == null) {
-      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
+      rejectAndEmitEvent(
+        CredentialError.NO_ACTIVITY_ERROR.code,
+        "Activity not available",
+        promise
+      )
       return
     }
 
@@ -188,14 +203,22 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           .addCredentialOption(googleIdOption)
           .build()
 
-
-        val result = getCredentialResultToWritableMap(
-          manager.getCredential(activity, request)
+        activity.runOnUiThread {
+          WindowCompat.getInsetsController(
+            activity.window,
+            activity.window.decorView
+          ).isAppearanceLightStatusBars = false
+        }
+        resolveAndEmit(
+          CredentialFactory.fromResponse(
+            manager.getCredential(activity, request)
+          ), promise
         )
-        promise.resolve(result)
-        raiseJsEvent(onCredentialReceived, result)
+      } catch (e: GetCredentialCancellationException) {
+        Log.d(LOG_TAG, e.toString())
+        resolveAndEmit(CredentialFactory.fromCancelled(), promise)
       } catch (e: Throwable) {
-        promise.reject(CredentialError.INVALID_RESULT_ERROR.code, e.toString())
+        rejectAndEmitEvent(CredentialError.INVALID_RESULT_ERROR.code, e.toString(), promise)
       }
     }
   }
@@ -206,7 +229,11 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   override fun getPassword(promise: Promise) {
     val activity = reactApplicationContext.currentActivity
     if (activity == null) {
-      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
+      rejectAndEmitEvent(
+        CredentialError.NO_ACTIVITY_ERROR.code,
+        "Activity not available",
+        promise
+      )
       return
     }
 
@@ -217,16 +244,16 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           listOf(GetPasswordOption())
         )
 
-        val result = getCredentialResultToWritableMap(
-          manager.getCredential(
-            request = request,
-            context = activity
-          )
+        resolveAndEmit(
+          CredentialFactory.fromResponse(
+            manager.getCredential(
+              request = request,
+              context = activity
+            )
+          ), promise
         )
-        promise.resolve(result)
-        raiseJsEvent(onCredentialReceived, result)
       } catch (e: Throwable) {
-        Log.e(LOG_TAG, e.toString())
+        Log.d(LOG_TAG, e.toString())
         promise.resolve(false)
       }
     }
@@ -238,7 +265,9 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   override fun passwordSignIn(username: String, password: String, promise: Promise) {
     val activity = reactApplicationContext.currentActivity
     if (activity == null) {
-      promise.reject(CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available")
+      rejectAndEmitEvent(
+        CredentialError.NO_ACTIVITY_ERROR.code, "Activity not available", promise
+      )
       return
     }
 
@@ -262,51 +291,6 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     }
   }
 
-  /**
-   * Gets the result formated as a writableMap.
-   */
-  private fun getCredentialResultToWritableMap(result: GetCredentialResponse): WritableMap {
-    return Arguments.createMap().apply {
-      val data = Arguments.createMap()
-
-      when (val credential = result.credential) {
-        is PasswordCredential -> {
-          val username = credential.id
-          val password = credential.password
-
-          putString("type", CredentialsType.PASSWORD.code)
-          data.putString("username", username)
-          data.putString("password", password)
-        }
-
-        is CustomCredential -> when (credential.type) {
-          GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL -> {
-            val googleCred = GoogleIdTokenCredential.createFrom(credential.data)
-
-            putString("type", CredentialsType.GOOGLE_ID.code)
-
-            data.putString("idToken", googleCred.idToken)
-            data.putString("id", googleCred.id)
-            data.putString("displayName", googleCred.displayName)
-            data.putString("givenName", googleCred.givenName)
-            data.putString("familyName", googleCred.familyName)
-            data.putString("profilePictureUri", googleCred.profilePictureUri?.toString())
-            data.putString("phoneNumber", googleCred.phoneNumber)
-          }
-
-          else -> {
-            throw IllegalStateException("Invalid auth type.")
-          }
-        }
-
-        else -> {
-          throw IllegalStateException("Invalid auth type.")
-        }
-      }
-
-      putMap("data", data)
-    }
-  }
 
   /**
    * Gets if has google play services.
@@ -317,17 +301,72 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     return result == ConnectionResult.SUCCESS
   }
 
+  @RequiresApi(Build.VERSION_CODES.O)
+  override fun initialize() {
+    super.initialize()
+
+    Log.d(LOG_TAG, "Registering deep link broadcast receiver")
+    val filter = IntentFilter(WEB_APPLE_ID_INTENT)
+    ContextCompat.registerReceiver(
+      reactApplicationContext,
+      appleDeepLinkReceiver,
+      filter,
+      ContextCompat.RECEIVER_NOT_EXPORTED
+    )
+  }
+
+  override fun invalidate() {
+    super.invalidate()
+    Log.d(LOG_TAG, "Unregistering deep link broadcast receiver")
+    reactApplicationContext.unregisterReceiver(appleDeepLinkReceiver)
+  }
+
+  private fun parseWebUrl(url: String?): Uri {
+    val url = url?.trim()
+      ?: throw IllegalArgumentException("URL cannot be null")
+
+    if (!Patterns.WEB_URL.matcher(url).matches()) {
+      throw IllegalArgumentException("Invalid URL format: $url")
+    }
+
+    return url.toUri()
+  }
+
   /**
-   * Raises the js event.
+   * Reject and emit event.
    */
-  private fun raiseJsEvent(eventName: String, data: WritableMap?) {
-    this.reactApplicationContext
-      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-      .emit(eventName, data)
+  private fun rejectAndEmitEvent(code: String, e: Throwable, promise: Promise) {
+    promise.reject(code, e)
+
+    val error = Arguments.createMap()
+    error.putString("code", code)
+    error.putString("message", e.toString())
+    emitOnWebAppleCredentialSuccess(error)
+  }
+
+  /**
+   * Reject and emit event.
+   */
+  private fun rejectAndEmitEvent(code: String, e: String, promise: Promise) {
+    promise.reject(code, e)
+
+    val error = Arguments.createMap()
+    error.putString("code", code)
+    error.putString("message", e)
+    emitOnCredentialFailure(error)
+  }
+
+  /**
+   * Resolves and emit event.
+   */
+  private fun resolveAndEmit(data: WritableMap, promise: Promise) {
+    promise.resolve(data.copy())
+    emitOnCredentialSuccess(data)
   }
 
   companion object {
     const val NAME = NativeOauthEssentialsSpec.NAME
     const val LOG_TAG = "NativeOauthEssentials"
+    const val WEB_APPLE_ID_INTENT = "com.oauthessentials.WEB_APPLE_ID_RECEIVED"
   }
 }
