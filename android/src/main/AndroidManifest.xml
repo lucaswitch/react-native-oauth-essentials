@@ -2,7 +2,7 @@
 
   <application>
     <activity
-      android:name=".DeepLinkAppleOAuthActivity"
+      android:name=".CustomTabsActivity"
       android:exported="true"
       android:launchMode="singleTask"
       android:theme="@android:style/Theme.Translucent.NoTitleBar">

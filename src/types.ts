@@ -36,9 +36,15 @@ export type AppleIdCredentialResult = {
   };
 };
 
-export type WebAppleIdCredentialResult<T> = {
+export type WebAppleIdCredentialResult = {
   type: CredentialsType.WEB_APPLE_ID;
-  data: T;
+  data: {
+    url: string;
+    scheme: string | null;
+    host: string | null;
+    path: string | null;
+    query: string | null;
+  };
 };
 
 export enum CredentialsType {

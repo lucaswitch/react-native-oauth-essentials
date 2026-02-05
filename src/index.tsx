@@ -65,42 +65,21 @@ export async function passwordSignIn(
  * @see [Apple Sign In REST API Documentation](https://developer.apple.com/documentation/signinwithapplerestapi)
  *
  * @param {string} androidWebUrl - The web URL on Android where the user will complete the OAuth flow. **[Android only]**
- * @param {number} androidWebTimeout - Timeout in milliseconds for the user to complete the OAuth form on Android.
  *
  * @returns {AppleIdCredentialResult|WebAppleIdCredentialResult} Returns AppleIdCredentialResult on IOS devices and WebAppleIdCredentialResult on android.
  */
-export async function appleSignIn<WebAppleIdCredentials>(
-  androidWebUrl?: string,
-  androidWebTimeout?: number
-): Promise<
-  AppleIdCredentialResult | WebAppleIdCredentialResult<WebAppleIdCredentials>
-> {
+export async function appleSignIn(
+  androidWebUrl?: string
+): Promise<AppleIdCredentialResult | WebAppleIdCredentialResult> {
   if (Platform.OS === 'ios') {
     return (await OauthEssentials.appleSignIn()) as AppleIdCredentialResult;
   } else {
     if (!androidWebUrl?.length) {
       throw new Error('webUrl cannot be empty on Android');
     }
-    await OauthEssentials.appleSignIn(androidWebUrl);
-
-    return await new Promise((resolve, reject) => {
-      const subscription = OauthEssentials.onWebAppleCredentialSuccess(
-        (event) => {
-          resolve(event as WebAppleIdCredentialResult<WebAppleIdCredentials>);
-          subscription.remove();
-          clearTimeout(timeoutId);
-        }
-      );
-
-      let timeoutTime = 60 * 5 * 1000;
-      if (typeof androidWebTimeout === 'number' && androidWebTimeout > 0) {
-        timeoutTime = androidWebTimeout;
-      }
-      let timeoutId = setTimeout(() => {
-        subscription.remove();
-        reject(new Error('Could not handle apple sign under 5 minutes.'));
-      }, timeoutTime);
-    });
+    return (await OauthEssentials.appleSignIn(
+      androidWebUrl
+    )) as WebAppleIdCredentialResult;
   }
 }
 

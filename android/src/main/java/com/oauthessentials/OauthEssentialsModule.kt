@@ -35,19 +35,36 @@ import java.util.Base64
 class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   NativeOauthEssentialsSpec(reactContext) {
 
-  private val appleDeepLinkReceiver = object : BroadcastReceiver() {
+  private val deepLinkReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
+      val url = intent?.getStringExtra("url")
+      Log.d(LOG_TAG, "Receiving deep link ${url}")
+
       intent?.getStringExtra("url")?.let { url ->
-        Log.d(LOG_TAG, "Handling deep link url: ${url}")
         val uri = url.toUri()
-        if (!uri.query.isNullOrEmpty()) {
-          emitOnWebAppleCredentialSuccess(CredentialFactory.fromUri(uri))
-        } else {
-          Log.d(LOG_TAG, "Could not handle ${url}, deep link query string is empty")
+        appleSignInPromiseSettler?.let {
+          if (!it.settled()) {
+            Log.d(LOG_TAG, "Sending deep link callback")
+            val result = Arguments.createMap().apply {
+              putString("type", CredentialFactory.CredentialsType.WEB_APPLE_ID.code)
+              putMap("data", Arguments.createMap().apply {
+                putString("url", uri.toString())
+                putString("scheme", uri.scheme)
+                putString("host", uri.host)
+                putString("path", uri.path)
+                putString("query", uri.query)
+              })
+            }
+            resolveAndEmit(result, it)
+          } else {
+            Log.d(LOG_TAG, "Cannot call deep link callback")
+          }
         }
       }
     }
   }
+
+  private var appleSignInPromiseSettler: RCTPromiseSettler? = null
 
   enum class CredentialError(val code: String) {
     NO_ACTIVITY_ERROR("NO_ACTIVITY_ERROR"),
@@ -135,6 +152,13 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
    */
   @RequiresApi(Build.VERSION_CODES.O)
   override fun appleSignIn(androidWebUrl: String?, promise: Promise) {
+    appleSignInPromiseSettler?.let {
+      if (!it.settled()) {
+        it.resolve(CredentialFactory.fromCancelled())
+      }
+    }
+    appleSignInPromiseSettler = null
+
     val activity = this.reactApplicationContext.currentActivity
     if (activity === null) {
       rejectAndEmitEvent(
@@ -144,7 +168,6 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       )
       return
     }
-
     var uri: Uri
     try {
       uri = parseWebUrl(androidWebUrl)
@@ -153,13 +176,14 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       return
     }
 
+    appleSignInPromiseSettler = RCTPromiseSettler(promise)
     activity.runOnUiThread {
-      val intent = Intent(Intent.ACTION_VIEW).apply {
+      val intent = Intent(activity, CustomTabsActivity::class.java).apply {
         data = uri
+        action = DISPLAY_CUSTOM_TABS_INTENT
       }
       activity.startActivity(intent)
     }
-    promise.resolve(true)
   }
 
   /**
@@ -184,6 +208,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       )
       return
     }
+
 
     CoroutineScope(Dispatchers.Main).launch {
       try {
@@ -306,10 +331,10 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     super.initialize()
 
     Log.d(LOG_TAG, "Registering deep link broadcast receiver")
-    val filter = IntentFilter(WEB_APPLE_ID_INTENT)
+    val filter = IntentFilter(DEEPLINK_WEB_APPLE_INTENT)
     ContextCompat.registerReceiver(
-      reactApplicationContext,
-      appleDeepLinkReceiver,
+      reactApplicationContext.applicationContext,
+      deepLinkReceiver,
       filter,
       ContextCompat.RECEIVER_NOT_EXPORTED
     )
@@ -318,7 +343,7 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   override fun invalidate() {
     super.invalidate()
     Log.d(LOG_TAG, "Unregistering deep link broadcast receiver")
-    reactApplicationContext.unregisterReceiver(appleDeepLinkReceiver)
+    reactApplicationContext.unregisterReceiver(deepLinkReceiver)
   }
 
   private fun parseWebUrl(url: String?): Uri {
@@ -364,9 +389,19 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
     emitOnCredentialSuccess(data)
   }
 
+  /**
+   * Resolves and emit event.
+   */
+  private fun resolveAndEmit(data: WritableMap, settler: RCTPromiseSettler) {
+    settler.resolve(data.copy())
+    emitOnCredentialSuccess(data)
+    Log.d(LOG_TAG, "Resolving event emitOnCredentialSuccess")
+  }
+
   companion object {
     const val NAME = NativeOauthEssentialsSpec.NAME
     const val LOG_TAG = "NativeOauthEssentials"
-    const val WEB_APPLE_ID_INTENT = "com.oauthessentials.WEB_APPLE_ID_RECEIVED"
+    const val DEEPLINK_WEB_APPLE_INTENT = "com.oauthessentials.WEB_APPLE_DEEP_LINK_INTENT"
+    const val DISPLAY_CUSTOM_TABS_INTENT = "com.oauthessentials.DISPLAY_CUSTOM_TABS"
   }
 }
