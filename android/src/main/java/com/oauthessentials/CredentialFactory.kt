@@ -6,6 +6,7 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.PasswordCredential
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import com.google.android.gms.auth.api.identity.SignInCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
 object CredentialFactory {
@@ -43,7 +44,7 @@ object CredentialFactory {
   /**
    * Creates from a response.
    */
-  fun fromResponse(result: GetCredentialResponse): WritableMap {
+  fun fromCredentialResponse(result: GetCredentialResponse): WritableMap {
     return Arguments.createMap().apply {
       val data = Arguments.createMap()
       when (val credential = result.credential) {
@@ -61,7 +62,6 @@ object CredentialFactory {
             val googleCred = GoogleIdTokenCredential.createFrom(credential.data)
 
             putString("type", CredentialsType.GOOGLE_ID.code)
-
             data.putString("idToken", googleCred.idToken)
             data.putString("id", googleCred.id)
             data.putString("displayName", googleCred.displayName)
@@ -69,6 +69,7 @@ object CredentialFactory {
             data.putString("familyName", googleCred.familyName)
             data.putString("profilePictureUri", googleCred.profilePictureUri?.toString())
             data.putString("phoneNumber", googleCred.phoneNumber)
+            data.putBoolean("legacy", false)
           }
 
           else -> {
@@ -81,6 +82,25 @@ object CredentialFactory {
         }
       }
       putMap("data", data)
+    }
+  }
+
+  fun fromLegacyCredentialResponse(result: SignInCredential): WritableMap {
+    return Arguments.createMap().apply {
+      putString("type", CredentialsType.GOOGLE_ID.code)
+      putMap(
+        "data",
+        Arguments.createMap().apply {
+          putString("id", result.id)
+          putString("idToken", result.googleIdToken)
+          putString("displayName", result.displayName)
+          putString("givenName", result.givenName)
+          putString("familyName", result.familyName)
+          putString("profilePictureUri", result.profilePictureUri?.toString())
+          putString("phoneNumber", result.phoneNumber)
+          putBoolean("legacy", true)
+        }
+      )
     }
   }
 

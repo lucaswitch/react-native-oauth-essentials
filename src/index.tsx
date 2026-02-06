@@ -151,3 +151,8 @@ export const GOOGLE_ID_SUPPORTED = CONSTANTS.GOOGLE_ID_SUPPORTED;
  * Gets if Apple id sign in is supported.
  */
 export const APPLE_ID_SUPPORTED = CONSTANTS.APPLE_ID_SUPPORTED;
+
+/**
+ * Gets if "hybryd" is supported in this platform.
+ */
+export const HYBRID_SUPPORTED = CONSTANTS.HYBRID_SUPPORTED;

@@ -64,9 +64,9 @@ android {
 
 dependencies {
   implementation "com.facebook.react:react-android"
-  implementation 'androidx.compose.runtime:runtime:1.10.2'
-  implementation 'androidx.browser:browser:1.9.0'
 
+  // Needed oauth libraries
+  implementation 'androidx.browser:browser:1.9.0'
   implementation 'androidx.credentials:credentials:1.5.0'
   implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
   implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.0'
