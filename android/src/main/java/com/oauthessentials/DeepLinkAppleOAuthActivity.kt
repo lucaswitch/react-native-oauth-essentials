@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import com.oauthessentials.OauthEssentialsModule.Companion.LOG_TAG
-import com.oauthessentials.OauthEssentialsModule.Companion.WEB_APPLE_ID_INTENT
+import com.oauthessentials.OauthEssentialsModule.Companion.WEB_APPLE_ID_BROADCAST_INTENT
 
 class DeepLinkAppleOAuthActivity : Activity() {
 
@@ -33,7 +33,7 @@ class DeepLinkAppleOAuthActivity : Activity() {
 
       val url = uri.toString()
       Log.d(LOG_TAG, "Received deep link url: ${url}")
-      val broadcast = Intent(WEB_APPLE_ID_INTENT)
+      val broadcast = Intent(WEB_APPLE_ID_BROADCAST_INTENT)
       broadcast.putExtra("url", url)
       sendBroadcast(broadcast)
     }
@@ -51,7 +51,7 @@ class DeepLinkAppleOAuthActivity : Activity() {
       val queryParams = uri.queryParameterNames.associateWith { uri.getQueryParameter(it) }
       Log.d(LOG_TAG, "Received query parameters: $queryParams")
 
-      val broadcast = Intent(WEB_APPLE_ID_INTENT).apply {
+      val broadcast = Intent(WEB_APPLE_ID_BROADCAST_INTENT).apply {
         queryParams.forEach { (key, value) ->
           putExtra(key, value)
         }

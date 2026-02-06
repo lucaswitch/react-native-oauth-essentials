@@ -1,10 +1,20 @@
-import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Button } from './Button';
 import {
   APPLE_ID_SUPPORTED,
   appleSignIn,
   getPassword,
   GOOGLE_ID_SUPPORTED,
   googleSignIn,
+  HYBRID_SUPPORTED,
   hybridSignIn,
   PASSWORD_SUPPORTED,
   passwordSignIn,
@@ -15,6 +25,7 @@ console.log('PLATFORM AVAILABILITY', {
   GOOGLE_ID_SUPPORTED,
   PASSWORD_SUPPORTED,
   APPLE_ID_SUPPORTED,
+  HYBRID_SUPPORTED,
 });
 
 // Replace with your own OAuth Android Client ID for Android on page: https://console.cloud.google.com/auth/clients
@@ -71,9 +82,10 @@ export default function App() {
   }
 
   useEffect(() => {
-    hybridSignIn(OAUTH_ANDROID_GOOGLE)
-      .then((result) => console.log('success', result))
-      .catch(console.error);
+    if (HYBRID_SUPPORTED)
+      hybridSignIn(OAUTH_ANDROID_GOOGLE)
+        .then((result) => console.log('success', result))
+        .catch(console.error);
   }, []);
 
   return (
@@ -102,6 +114,8 @@ export default function App() {
         </>
       ) : (
         <>
+          <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+          <Image source={require('../res/logo.png')} style={styles.logo} />
           <Text>Open up console to see results!</Text>
           {GOOGLE_ID_SUPPORTED && (
             <Button
@@ -141,5 +155,9 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 200,
+  },
+  logo: {
+    width: 240,
+    height: 240,
   },
 });

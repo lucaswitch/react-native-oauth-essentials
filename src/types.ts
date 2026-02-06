@@ -21,6 +21,7 @@ export type GoogleIdCredentialResult = {
     familyName: string;
     profilePictureUri?: string | null;
     phoneNumber?: string | null;
+    legacy: boolean;
   };
 };
 
