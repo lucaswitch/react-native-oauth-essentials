@@ -18,7 +18,7 @@ Make sure to pod install to update the native part of your app:
 
 ```
 cd ios;
-pod install; or // bundle exec po
+pod install; or // bundle exec pod install
 ```
 
 ## Configuration
