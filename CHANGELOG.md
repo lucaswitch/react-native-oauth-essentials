@@ -1,5 +1,9 @@
 # Changelog
 
+## <small>1.0.6 (2026-02-12)</small>
+
+* fix: update correct homepage ([8a2b709](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8a2b709))
+
 ## <small>1.0.5 (2026-02-12)</small>
 
 * fix: docs ([492a97a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/492a97a))
