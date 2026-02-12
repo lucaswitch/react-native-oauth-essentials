@@ -4,12 +4,24 @@
 Sign-In, Apple Sign-In, and Password Sign-In**, delivering a **native sign-in experience** with a simple, promise-based
 API. It's a must-have for every React Native app.
 
+## Installation
+
+Install the library via npm:
+
+```bash
+npm install react-native-oauth-essentials
+```
+
+```bash
+yarn add react-native-oauth-essentials
+```
+
 ## How to use it
 
-[Installation](./installation.md)
+Please jump to our docs website
 
-[Usage](./usage)no
-## Usage
+[Docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/intro)
+[Installation](https://lucaswitch.github.io/react-native-oauth-essentials/docs/installation)
 
 ### Platform Support Details
 
