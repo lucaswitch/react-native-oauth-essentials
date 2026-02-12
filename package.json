@@ -59,7 +59,7 @@
   "bugs": {
     "url": "https://github.com/lucaswitch/react-native-oauth-essentials/issues"
   },
-  "homepage": "https://github.com/lucaswitch/react-native-oauth-essentials#readme",
+  "homepage": "https://lucaswitch.github.io/react-native-oauth-essentials/docs/intro",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
