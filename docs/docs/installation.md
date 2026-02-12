@@ -71,22 +71,20 @@ From inside your app base directory:
 ./node_modules/react-native-oauth-essentials/plist-generate.sh YOUR_GOOGLE_CLIENT_ID
 ```
 
-It will generate something like the following:
+The script will output an Info.plist entry. Add the following to your `ios/YOUR_APP_NAME/Info.plist`:
 
-```bash
-Add carefully into your Info.plist the following entry:
-
+```xml
 <key>CFBundleURLTypes</key>
 <array>
     <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-            <string>YOUR GOOGLE CLIENT ID</string>
+            <string>YOUR_GOOGLE_CLIENT_ID</string>
         </array>
     </dict>
 </array>
 ```
 
-You just have to add it now into your ios/YOUR_APP_NAME/Info.plist.
+Replace `YOUR_GOOGLE_CLIENT_ID` with your actual Google Client ID.
 
 There you go, you're ready to use it!
