@@ -12,10 +12,6 @@
     "release": true,
     "releaseName": "v${version}"
   },
-  "hooks": {
-    "before:init": ["yarn prerelease"],
-    "after:bump": "echo '✅ Bump done, continuing...'"
-  },
   "plugins": {
     "@release-it/conventional-changelog": {
       "preset": "angular",

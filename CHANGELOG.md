@@ -1,5 +1,23 @@
 # Changelog
 
+## <small>1.0.4 (2026-02-12)</small>
+
+* fix: docs ([78439ac](https://github.com/lucaswitch/react-native-oauth-essentials/commit/78439ac))
+* fix: docs ([e13af7a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/e13af7a))
+* fix: fix typo ([1d1cd0c](https://github.com/lucaswitch/react-native-oauth-essentials/commit/1d1cd0c))
+* fix: remove --immutable flag to allow yarn version differences ([a8b3278](https://github.com/lucaswitch/react-native-oauth-essentials/commit/a8b3278))
+* fix: update docs deployment workflow ([710a419](https://github.com/lucaswitch/react-native-oauth-essentials/commit/710a419))
+* fix: update docs deployment workflow and add comprehensive documentation ([1a9281d](https://github.com/lucaswitch/react-native-oauth-essentials/commit/1a9281d))
+
+## <small>1.0.3 (2026-02-12)</small>
+
+* fix: docs ([78439ac](https://github.com/lucaswitch/react-native-oauth-essentials/commit/78439ac))
+* fix: docs ([e13af7a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/e13af7a))
+* fix: fix typo ([1d1cd0c](https://github.com/lucaswitch/react-native-oauth-essentials/commit/1d1cd0c))
+* fix: remove --immutable flag to allow yarn version differences ([a8b3278](https://github.com/lucaswitch/react-native-oauth-essentials/commit/a8b3278))
+* fix: update docs deployment workflow ([710a419](https://github.com/lucaswitch/react-native-oauth-essentials/commit/710a419))
+* fix: update docs deployment workflow and add comprehensive documentation ([1a9281d](https://github.com/lucaswitch/react-native-oauth-essentials/commit/1a9281d))
+
 ## <small>1.0.2 (2026-02-12)</small>
 
 * fix: .release-it.json ([85d537a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/85d537a))
