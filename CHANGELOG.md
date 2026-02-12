@@ -1,5 +1,10 @@
 # Changelog
 
+## <small>1.0.2 (2026-02-12)</small>
+
+* fix: .release-it.json ([85d537a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/85d537a))
+* feat: add initial version ([f4e7c4e](https://github.com/lucaswitch/react-native-oauth-essentials/commit/f4e7c4e))
+
 All notable changes to this project will be documented in this file.
 
 The format is based on Conventional Commits.
