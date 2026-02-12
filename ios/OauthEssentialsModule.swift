@@ -64,7 +64,7 @@ public class OauthEssentialsModule: NSObject {
       "PASSWORD_SUPPORTED": passwordSupported,
       "GOOGLE_PLAY_SERVICES_SUPPORTED": false, // Not applicable on iOS, it does not have Google Play Services
       "APPLE_ID_SUPPORTED": appleIdSupported,
-      "HYBRID_SUPPORTED": true,
+      "HYBRID_SUPPORTED": passwordSupported || appleIdSupported,
       "PASSKEYS_SUPPORTED": passkeySupported
     ]
   }
