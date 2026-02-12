@@ -1,5 +1,17 @@
 # Changelog
 
+## <small>1.0.8 (2026-02-12)</small>
+
+* fix: fix ios build error ([8bc151f](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8bc151f))
+* fix: fix passkey typo on ios ([abab043](https://github.com/lucaswitch/react-native-oauth-essentials/commit/abab043))
+* fix: fix passkey typo on ios ([705e7f5](https://github.com/lucaswitch/react-native-oauth-essentials/commit/705e7f5))
+
+## <small>1.0.7 (2026-02-12)</small>
+
+* fix: fix ios build error ([8bc151f](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8bc151f))
+* fix: fix passkey typo on ios ([abab043](https://github.com/lucaswitch/react-native-oauth-essentials/commit/abab043))
+* fix: fix passkey typo on ios ([705e7f5](https://github.com/lucaswitch/react-native-oauth-essentials/commit/705e7f5))
+
 ## <small>1.0.6 (2026-02-12)</small>
 
 * fix: update correct homepage ([8a2b709](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8a2b709))
