@@ -1,3 +1,11 @@
+//
+//  PasskeyRetriever.swift
+//  Pods
+//
+//  Created by Lucas on 12/02/26.
+//
+
+
 import AuthenticationServices
 import React
 
@@ -96,11 +104,15 @@ public class PasskeyRetriever: RCTPromiseSettler,
     }
 
     if let excludeCredentials = json["excludeCredentials"] as? [[String: Any]] {
-      request.excludedCredentials = excludeCredentials.compactMap { cred in
-        guard let idStr = cred["id"] as? String,
-              let idData = base64URLDecode(idStr) else { return nil }
-        return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: idData)
-      }
+        if #available(iOS 17.4, *) {
+            request.excludedCredentials = excludeCredentials.compactMap { cred in
+                guard let idStr = cred["id"] as? String,
+                      let idData = base64URLDecode(idStr) else { return nil }
+                return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: idData)
+            }
+        } else {
+            // Fallback on earlier versions
+        }
     }
 
     return request
