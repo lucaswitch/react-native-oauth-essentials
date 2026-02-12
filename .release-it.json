@@ -14,7 +14,7 @@
   },
   "hooks": {
     "before:init": ["yarn prerelease"],
-    "after:bump": "echo '\n✏️  Please review and edit CHANGELOG.md if needed, then continue...' && read -p 'Press Enter to continue or Ctrl+C to cancel: ' _"
+    "after:bump": "echo '✅ Bump done, continuing...'"
   },
   "plugins": {
     "@release-it/conventional-changelog": {
