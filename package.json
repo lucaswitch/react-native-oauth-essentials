@@ -1,6 +1,6 @@
 {
   "name": "react-native-oauth-essentials",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Essential Auth tools for every app.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",

@@ -1,5 +1,9 @@
 # Changelog
 
+## <small>1.0.5 (2026-02-12)</small>
+
+* fix: docs ([492a97a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/492a97a))
+
 ## <small>1.0.4 (2026-02-12)</small>
 
 * fix: docs ([78439ac](https://github.com/lucaswitch/react-native-oauth-essentials/commit/78439ac))
