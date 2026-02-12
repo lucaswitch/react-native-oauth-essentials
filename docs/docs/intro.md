@@ -8,6 +8,8 @@ sidebar_position: 1
 Sign-In, Apple Sign-In, and Password Sign-In**, delivering a **native sign-in experience** with a simple, promise-based
 API. It's a must-have for every React Native app.
 
+**Platform Support:** iOS and Android only. This library does not support React Native Web or other platforms.
+
 ## How to use it
 
 [Installation](./installation.md)
