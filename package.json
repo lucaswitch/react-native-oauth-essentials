@@ -48,7 +48,15 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "oauth",
+    "auth",
+    "sign-in",
+    "sign",
+    "passkeys",
+    "web",
+    "autumn",
+    "credentials"
   ],
   "repository": {
     "type": "git",
