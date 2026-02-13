@@ -1,5 +1,9 @@
 # Changelog
 
+## <small>1.0.9 (2026-02-13)</small>
+
+* feat: add better keywords ([8f6063a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8f6063a))
+
 ## <small>1.0.8 (2026-02-12)</small>
 
 * fix: fix ios build error ([8bc151f](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8bc151f))
