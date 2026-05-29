@@ -6,7 +6,6 @@ export type GoogleSignInOptions = {
 export type PasskeyOptions = {
   requestJson: string;
   preferImmediatelyAvailableCredentials?: boolean; // [Android only]
-  isConditional?: boolean; // [Android only]
 };
 
 export type PassKeyCredentialResult = {
