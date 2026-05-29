@@ -395,16 +395,14 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           preferImmediatelyAvailableCredentials =
             options.getBoolean("preferImmediatelyAvailableCredentials")
         }
-        var isConditional = false
-        if (options.hasKey("isConditional")) {
-          isConditional = options.getBoolean("isConditional")
-        }
+        // `isConditional` (conditional create) só existe em androidx.credentials
+        // >= 1.6.0. Estamos fixados em 1.5.0 estável (ver build.gradle), então o
+        // parâmetro não é suportado aqui.
 
         val manager = CredentialManager.create(activity)
         val request = CreatePublicKeyCredentialRequest(
           requestJson = requestJson,
-          preferImmediatelyAvailableCredentials = preferImmediatelyAvailableCredentials,
-          isConditional = isConditional
+          preferImmediatelyAvailableCredentials = preferImmediatelyAvailableCredentials
         )
         // createCredential lança UI: deve rodar na Main thread (ver hybridSignIn).
         val result = withContext(Dispatchers.Main) {
