@@ -67,8 +67,17 @@ dependencies {
 
   // Needed oauth libraries
   implementation 'androidx.browser:browser:1.9.0'
-  implementation 'androidx.credentials:credentials:1.5.0'
-  implementation("androidx.credentials:credentials-play-services-auth:1.6.0-rc01")
+  // androidx.credentials fixado em estável 1.5.0 com `strictly`: o
+  // play-services-auth:21.5.0 puxa transitivamente credentials/-play-services-auth
+  // 1.6.0-rc01 (release candidate), cujo provider GMS deixa o chooser
+  // (SignInCredentialChooserActivity) pendurado — getCredential nunca resolve.
+  // `strictly` faz o downgrade da transitiva e propaga pro classpath do app.
+  implementation('androidx.credentials:credentials') {
+    version { strictly '1.5.0' }
+  }
+  implementation('androidx.credentials:credentials-play-services-auth') {
+    version { strictly '1.5.0' }
+  }
   implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.0'
   implementation 'com.google.android.gms:play-services-auth:21.5.0'
 }
