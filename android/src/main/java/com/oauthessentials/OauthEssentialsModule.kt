@@ -144,7 +144,9 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
       try {
         val manager = CredentialManager.create(activity)
         val randomBytes = ByteArray(32)
-        SecureRandom.getInstanceStrong().nextBytes(randomBytes)
+        // Usa SecureRandom() (não-bloqueante) em vez de getInstanceStrong(),
+        // que pode bloquear esperando entropia (/dev/random) e pendurar o fluxo.
+        SecureRandom().nextBytes(randomBytes)
         val randomNonce = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes)
 
         val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
@@ -159,13 +161,17 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           .addCredentialOption(GetPasswordOption())
           .build()
 
+        // getCredential precisa lançar a Activity de UI (chooser), então deve
+        // rodar na Main thread — igual ao googleSignIn. Chamar em Dispatchers.IO
+        // fazia o chooser abrir sem se vincular à UI e travar (ANR na abertura).
+        val result = withContext(Dispatchers.Main) {
+          manager.getCredential(
+            request = request,
+            context = activity
+          )
+        }
         resolveAndEmit(
-          CredentialFactory.fromCredentialResponse(
-            manager.getCredential(
-              request = request,
-              context = activity
-            )
-          ), promise
+          CredentialFactory.fromCredentialResponse(result), promise
         )
       } catch (e: GetCredentialCancellationException) {
         Log.d(LOG_TAG, e.toString())
@@ -301,13 +307,15 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           listOf(GetPasswordOption())
         )
 
+        // getCredential lança UI: deve rodar na Main thread (ver hybridSignIn).
+        val result = withContext(Dispatchers.Main) {
+          manager.getCredential(
+            request = request,
+            context = activity
+          )
+        }
         resolveAndEmit(
-          CredentialFactory.fromCredentialResponse(
-            manager.getCredential(
-              request = request,
-              context = activity
-            )
-          ), promise
+          CredentialFactory.fromCredentialResponse(result), promise
         )
       } catch (e: Throwable) {
         Log.d(LOG_TAG, e.toString())
@@ -343,10 +351,13 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           password = password
         )
 
-        manager.createCredential(
-          request = request,
-          context = activity
-        )
+        // createCredential lança UI: deve rodar na Main thread (ver hybridSignIn).
+        withContext(Dispatchers.Main) {
+          manager.createCredential(
+            request = request,
+            context = activity
+          )
+        }
         promise.resolve(true)
       } catch (e: Throwable) {
         Log.e(LOG_TAG, e.toString())
@@ -395,10 +406,13 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           preferImmediatelyAvailableCredentials = preferImmediatelyAvailableCredentials,
           isConditional = isConditional
         )
-        val result = manager.createCredential(
-          request = request,
-          context = activity
-        )
+        // createCredential lança UI: deve rodar na Main thread (ver hybridSignIn).
+        val result = withContext(Dispatchers.Main) {
+          manager.createCredential(
+            request = request,
+            context = activity
+          )
+        }
         resolveAndEmit(CredentialFactory.fromPublicKeyCredential(result), promise)
       } catch (e: Throwable) {
         when (e) {
@@ -454,10 +468,13 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
           ),
           preferImmediatelyAvailableCredentials = preferImmediatelyAvailableCredentials
         )
-        val result = manager.getCredential(
-          request = request,
-          context = activity
-        )
+        // getCredential lança UI: deve rodar na Main thread (ver hybridSignIn).
+        val result = withContext(Dispatchers.Main) {
+          manager.getCredential(
+            request = request,
+            context = activity
+          )
+        }
         resolveAndEmit(CredentialFactory.fromPublicKeyCredential(result), promise)
       } catch (e: Throwable) {
         when (e) {
