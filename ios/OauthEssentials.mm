@@ -17,7 +17,9 @@
                 initOnCredentialSuccess:^(NSDictionary * _Nonnull value) {
       [weakSelf emitOnCredentialSuccess:value];
     } onCredentialFailure:^(NSDictionary * _Nonnull value) {
-      [weakSelf emitOnCredentialSuccess:value];
+      [weakSelf emitOnCredentialFailure:value];
+    } onAppleIdCredentialRevoked:^(NSDictionary * _Nonnull value) {
+      [weakSelf emitOnAppleIdCredentialRevoked:value];
     }];
   }
   return self;
@@ -52,6 +54,23 @@
                  rejecter:reject];
 }
 
+- (void)googleSilentSignIn:(NSString *)clientId
+                   options:(NSDictionary *)options
+                   resolve:(RCTPromiseResolveBlock)resolve
+                    reject:(RCTPromiseRejectBlock)reject
+{
+  [_sModule googleSilentSignIn:clientId
+                       options:options
+                      resolver:resolve
+                      rejecter:reject];
+}
+
+- (void)signOut:(RCTPromiseResolveBlock)resolve
+         reject:(RCTPromiseRejectBlock)reject
+{
+  [_sModule signOut:resolve rejecter:reject];
+}
+
 - (void)passwordSignIn:(NSString *)username
               password:(NSString *)password
                resolve:(RCTPromiseResolveBlock)resolve
@@ -80,9 +99,16 @@
 }
 
 - (void)appleSignIn:(NSString *)webAndroidUrl
+            options:(NSDictionary *)options
             resolve:(RCTPromiseResolveBlock)resolve
             reject:(RCTPromiseRejectBlock)reject {
-    [_sModule appleSignIn:webAndroidUrl resolver:resolve rejecter:reject];
+    [_sModule appleSignIn:webAndroidUrl options:options resolver:resolve rejecter:reject];
+}
+
+- (void)getAppleIdCredentialState:(NSString *)userId
+                          resolve:(RCTPromiseResolveBlock)resolve
+                           reject:(RCTPromiseRejectBlock)reject {
+    [_sModule getAppleIdCredentialState:userId resolver:resolve rejecter:reject];
 }
 
 - (void)createPassKey:(NSDictionary *)options
@@ -95,6 +121,23 @@
            resolve:(RCTPromiseResolveBlock)resolve
             reject:(RCTPromiseRejectBlock)reject {
     [_sModule getPassKey:options resolver:resolve rejecter:reject];
+}
+
+- (void)cancelPassKeyAutoFill:(RCTPromiseResolveBlock)resolve
+                       reject:(RCTPromiseRejectBlock)reject {
+    [_sModule cancelPassKeyAutoFill:resolve rejecter:reject];
+}
+
+- (void)generatePkce:(RCTPromiseResolveBlock)resolve
+              reject:(RCTPromiseRejectBlock)reject {
+    [_sModule generatePkce:resolve rejecter:reject];
+}
+
+- (void)openAuthSession:(NSString *)url
+                options:(NSDictionary *)options
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject {
+    [_sModule openAuthSession:url options:options resolver:resolve rejecter:reject];
 }
 
 - (facebook::react::ModuleConstants<JS::NativeOauthEssentials::Constants>) constantsToExport {

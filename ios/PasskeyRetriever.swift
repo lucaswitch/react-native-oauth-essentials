@@ -20,15 +20,20 @@ public class PasskeyRetriever: RCTPromiseSettler,
   }
 
   private let mode: Mode
+  /// AutoFill requests wait for the user to pick a passkey in the QuickType bar.
+  let autoFill: Bool
+  private var controller: ASAuthorizationController?
 
   init(
     requestJson: String,
     mode: Mode,
+    autoFill: Bool,
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock,
     emitEvent: ((String, NSDictionary) -> Void)?
   ) {
     self.mode = mode
+    self.autoFill = autoFill && mode == .assertion
     super.init(resolve: resolve, reject: reject, emitEvent: emitEvent)
 
     do {
@@ -36,15 +41,20 @@ public class PasskeyRetriever: RCTPromiseSettler,
       let controller = ASAuthorizationController(authorizationRequests: [request])
       controller.delegate = self
       controller.presentationContextProvider = self
-      controller.performRequests(options: .preferImmediatelyAvailableCredentials)
+      self.controller = controller
+      if self.autoFill {
+        controller.performAutoFillAssistedRequests()
+      } else {
+        controller.performRequests(options: .preferImmediatelyAvailableCredentials)
+      }
     } catch {
-      reject(
-        CredentialError.invalidResult.rawValue,
-        "Failed to parse requestJson: \(error.localizedDescription)",
-        error
-      )
-      cleanup()
+      fail(.invalidResult, "Failed to parse requestJson: \(error.localizedDescription)", error)
     }
+  }
+
+  /// Cancels the pending request, which resolves it as cancelled.
+  func cancel() {
+    controller?.cancel()
   }
 
   private func buildRequest(requestJson: String, mode: Mode) throws -> ASAuthorizationRequest {
@@ -152,51 +162,40 @@ public class PasskeyRetriever: RCTPromiseSettler,
     controller: ASAuthorizationController,
     didCompleteWithAuthorization authorization: ASAuthorization
   ) {
+    self.controller = nil
     switch mode {
     case .registration:
       if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration {
-        let result = CredentialFactory.fromPasskeyRegistration(credential: credential)
-        self.resolve?(result)
-        self.emitEvent?("onCredentialSuccess", result as NSDictionary)
+        succeed(CredentialFactory.fromPasskeyRegistration(credential: credential))
+        return
       }
     case .assertion:
       if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
-        let result = CredentialFactory.fromPasskeyAssertion(credential: credential)
-        self.resolve?(result)
-        self.emitEvent?("onCredentialSuccess", result as NSDictionary)
+        succeed(CredentialFactory.fromPasskeyAssertion(credential: credential))
+        return
       }
     }
-    cleanup()
+    fail(.invalidResult, "Unexpected credential type")
   }
 
   public func authorizationController(
     controller: ASAuthorizationController,
     didCompleteWithError error: Error
   ) {
+    self.controller = nil
     let nsError = error as NSError
     if nsError.domain == ASAuthorizationError.errorDomain,
        nsError.code == ASAuthorizationError.canceled.rawValue {
-      let result = CredentialFactory.fromCancelled()
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
+      succeed(CredentialFactory.fromCancelled())
     } else {
-      self.reject?(
-        CredentialError.invalidResult.rawValue,
-        error.localizedDescription,
-        error
-      )
-      self.emitEvent?("onCredentialFailure", [
-        "code": CredentialError.invalidResult.rawValue,
-        "message": error.localizedDescription
-      ])
+      fail(.invalidResult, error.localizedDescription, error)
     }
-    cleanup()
   }
 
   // MARK: - ASAuthorizationControllerPresentationContextProviding
 
   public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-    return UIWindow()
+    return PresentationContext.anchor()
   }
 
   // MARK: - Helpers

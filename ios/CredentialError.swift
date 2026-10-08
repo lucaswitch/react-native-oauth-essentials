@@ -3,4 +3,6 @@ public enum CredentialError: String {
   case invalidResult = "INVALID_RESULT_ERROR"
   case simultaneousCallError = "SIMULTANEOUS_CALL_ERROR"
   case notSupportedError = "NOT_SUPPORTED_ERROR"
+  case browserUnavailable = "BROWSER_UNAVAILABLE"
+  case noActivity = "NO_ACTIVITY_ERROR"
 }

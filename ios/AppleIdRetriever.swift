@@ -5,7 +5,10 @@ public class AppleIdRetriever: RCTPromiseSettler,
   ASAuthorizationControllerDelegate,
   ASAuthorizationControllerPresentationContextProviding  {
 
-  override init(
+  private var controller: ASAuthorizationController?
+
+  init(
+    options: NSDictionary,
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock,
     emitEvent: ((String, NSDictionary) -> Void)?
@@ -13,49 +16,51 @@ public class AppleIdRetriever: RCTPromiseSettler,
     super.init(resolve: resolve, reject: reject, emitEvent: emitEvent)
 
     let controller = ASAuthorizationController(authorizationRequests: [
-      ASAuthorizationAppleIDProvider().createRequest(),
+      AppleIdRetriever.createRequest(options: options),
     ])
-
     controller.delegate = self
     controller.presentationContextProvider = self
+    self.controller = controller
+    controller.performRequests()
+  }
 
-    if #available(iOS 16.0, *) {
-      controller.performRequests(options: .preferImmediatelyAvailableCredentials)
-    } else {
-      controller.performRequests()
+  /// Apple only returns the email and full name on the first sign in, and only when requested.
+  static func createRequest(options: NSDictionary?) -> ASAuthorizationAppleIDRequest {
+    let request = ASAuthorizationAppleIDProvider().createRequest()
+    request.requestedScopes = [.fullName, .email]
+    if let nonce = options?["nonce"] as? String {
+      request.nonce = nonce
     }
+    if let state = options?["state"] as? String {
+      request.state = state
+    }
+    return request
   }
 
   public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-    return UIWindow()
+    return PresentationContext.anchor()
   }
 
   public func authorizationController(
     controller: ASAuthorizationController,
     didCompleteWithAuthorization authorization: ASAuthorization
   ) {
+    self.controller = nil
     if let appleIdCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-      let result = CredentialFactory.fromAppleId(appleIdCredential: appleIdCredential)
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
-      cleanup()
+      succeed(CredentialFactory.fromAppleId(appleIdCredential: appleIdCredential))
+    } else {
+      fail(.invalidResult, "Unexpected credential type")
     }
   }
 
   public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+    self.controller = nil
     let nsError = error as NSError
     if nsError.domain == ASAuthorizationError.errorDomain,
        nsError.code == ASAuthorizationError.canceled.rawValue {
-      
-      let result = CredentialFactory.fromCancelled()
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
+      succeed(CredentialFactory.fromCancelled())
     } else {
-      self.emitEvent?("onCredentialFailure", [
-        "code": CredentialError.invalidResult.rawValue,
-        "message": error.localizedDescription
-      ])
+      fail(.invalidResult, error.localizedDescription, error)
     }
-    cleanup()
   }
 }

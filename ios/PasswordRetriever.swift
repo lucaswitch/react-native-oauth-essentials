@@ -5,6 +5,8 @@ public class PasswordRetriever: RCTPromiseSettler,
   ASAuthorizationControllerDelegate,
   ASAuthorizationControllerPresentationContextProviding {
 
+  private var controller: ASAuthorizationController?
+
   override init(
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock,
@@ -16,6 +18,7 @@ public class PasswordRetriever: RCTPromiseSettler,
     let controller = ASAuthorizationController(authorizationRequests: [request])
     controller.delegate = self
     controller.presentationContextProvider = self
+    self.controller = controller
     if #available(iOS 16.0, *) {
       controller.performRequests(options: .preferImmediatelyAvailableCredentials)
     } else {
@@ -27,12 +30,11 @@ public class PasswordRetriever: RCTPromiseSettler,
     controller: ASAuthorizationController,
     didCompleteWithAuthorization authorization: ASAuthorization
   ) {
+    self.controller = nil
     if let credential = authorization.credential as? ASPasswordCredential {
-      let result = CredentialFactory.fromPassword(credential:  credential)
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
-
-      cleanup()
+      succeed(CredentialFactory.fromPassword(credential: credential))
+    } else {
+      fail(.invalidResult, "Unexpected credential type")
     }
   }
 
@@ -40,33 +42,17 @@ public class PasswordRetriever: RCTPromiseSettler,
     controller: ASAuthorizationController,
     didCompleteWithError error: Error
   ) {
+    self.controller = nil
     let nsError = error as NSError
     if nsError.domain == ASAuthorizationError.errorDomain,
        nsError.code == ASAuthorizationError.canceled.rawValue {
-    
-      let result = CredentialFactory.fromCancelled()
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
+      succeed(CredentialFactory.fromCancelled())
     } else {
-      self.reject?(
-        CredentialError.invalidResult.rawValue,
-        error.localizedDescription,
-        error
-      )
-      self.emitEvent?("onCredentialFailure", [
-        "code": CredentialError.invalidResult.rawValue,
-        "message": error.localizedDescription
-      ])
+      fail(.invalidResult, error.localizedDescription, error)
     }
-
-    self.cleanup()
   }
 
   public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-    return UIWindow()
-  }
-
-  func getIsSettled() -> Bool {
-    return resolve == nil || reject == nil
+    return PresentationContext.anchor()
   }
 }

@@ -29,7 +29,8 @@ class CredentialFactory {
           "user": appleIdCredential.user,
           "email": appleIdCredential.email ?? "",
           "fullName": fullName,
-          "likelyReal": appleIdCredential.realUserStatus == .likelyReal
+          "likelyReal": appleIdCredential.realUserStatus == .likelyReal,
+          "state": appleIdCredential.state ?? NSNull()
         ]
 
         let result: [String: Any] = [
@@ -112,7 +113,7 @@ class CredentialFactory {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    public static func fromGoogleId(user: GIDGoogleUser) -> [String: Any] {
+    public static func fromGoogleId(user: GIDGoogleUser, serverAuthCode: String?) -> [String: Any] {
         let profile = user.profile
         let data: [String: Any] = [
           "idToken": user.idToken?.tokenString ?? "",
@@ -121,7 +122,10 @@ class CredentialFactory {
           "givenName": profile?.givenName ?? "",
           "familyName": profile?.familyName ?? "",
           "profilePictureUri": profile?.imageURL(withDimension: 200)?.absoluteString ?? "",
-          "email": profile?.email ?? ""
+          "email": profile?.email ?? "",
+          "accessToken": user.accessToken.tokenString,
+          "serverAuthCode": serverAuthCode ?? NSNull(),
+          "grantedScopes": user.grantedScopes ?? []
         ]
 
         let result: [String: Any] = [

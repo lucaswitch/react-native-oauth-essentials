@@ -1,83 +1,111 @@
 import GoogleSignIn
 import React
 
+/// Must be created on the main thread: GIDSignIn presents ASWebAuthenticationSession synchronously.
 public class GoogleIdRetriever: RCTPromiseSettler {
+
+  /// How long to wait for the app to become active before giving up on opening the browser.
+  private static let activeTimeout: TimeInterval = 2
 
   init(
     clientId: String,
     options: NSDictionary,
+    silent: Bool,
     resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock,
     emitEvent: ((String, NSDictionary) -> Void)?
   ) {
     super.init(resolve: resolve, reject: reject, emitEvent: emitEvent)
-    performGoogleSignIn(clientId:clientId, options: options)
+    GIDSignIn.sharedInstance.configuration = GIDConfiguration(
+      clientID: clientId,
+      serverClientID: options["serverClientId"] as? String,
+      hostedDomain: options["hostedDomain"] as? String,
+      openIDRealm: nil
+    )
+
+    if silent {
+      restorePreviousSignIn()
+    } else {
+      performGoogleSignIn(options: options)
+    }
   }
 
-  private func performGoogleSignIn(clientId: String, options: NSDictionary) {
-    var rootVC: UIViewController?
-    DispatchQueue.main.sync {
-        if #available(iOS 13.0, *) {
-            rootVC = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap { $0.windows }
-                .first { $0.isKeyWindow }?
-                .rootViewController
-        } else {
-            rootVC = UIApplication.shared.keyWindow?.rootViewController
-        }
-    }
-
-    guard let rootVC = rootVC else {
-      self.reject?(
-        CredentialError.noSignInAvailable.rawValue,
-        "No root view controller available",
-        nil
-      )
-      self.emitEvent?("onCredentialFailure", [
-        "code": CredentialError.noSignInAvailable.rawValue,
-        "message": "No root view controller available"
-      ])
-
-      self.cleanup()
+  private func performGoogleSignIn(options: NSDictionary) {
+    if UIAccessibility.isGuidedAccessEnabled {
+      fail(.browserUnavailable, "Google Sign-In cannot open the browser while Guided Access is enabled")
       return
     }
 
-    GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
-    GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { result, error in
-      
-      if let error = error {
-        let nsError = error as NSError
-        if nsError.code == GIDSignInError.canceled.rawValue {
-          let result = CredentialFactory.fromCancelled()
-          self.resolve?(result)
-          self.emitEvent?("onCredentialSuccess", result as NSDictionary)
-        } else {
-          self.reject?(CredentialError.invalidResult.rawValue, error.localizedDescription, error)
-          self.emitEvent?("onCredentialFailure", [
-            "code": CredentialError.invalidResult.rawValue,
-            "message": error.localizedDescription
-          ])
-        }
-        self.cleanup()
+    PresentationContext.whenActive(timeout: Self.activeTimeout) { active in
+      guard active else {
+        self.fail(.browserUnavailable, "Google Sign-In requires the app to be active")
         return
       }
-      
-      guard let user = result?.user else {
-          self.reject?(CredentialError.invalidResult.rawValue, "No user returned", nil)
-          self.emitEvent?("onCredentialFailure", [
-            "code": CredentialError.invalidResult.rawValue,
-            "message": "No user returned"
-          ])
-          
-          self.cleanup()
-          return
+      guard let presenter = PresentationContext.topViewController() else {
+        self.fail(.noActivity, "No view controller available to present Google Sign-In")
+        return
       }
 
-      let result = CredentialFactory.fromGoogleId(user: user)
-      self.resolve?(result)
-      self.emitEvent?("onCredentialSuccess", result as NSDictionary)
-      self.cleanup()
+      GIDSignIn.sharedInstance.signIn(
+        withPresenting: presenter,
+        hint: options["hint"] as? String,
+        additionalScopes: options["scopes"] as? [String],
+        nonce: options["nonce"] as? String
+      ) { result, error in
+        self.handle(user: result?.user, serverAuthCode: result?.serverAuthCode, error: error)
+      }
     }
+  }
+
+  private func restorePreviousSignIn() {
+    guard GIDSignIn.sharedInstance.hasPreviousSignIn() else {
+      fail(.noSignInAvailable, "No previous Google sign in to restore")
+      return
+    }
+
+    GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
+      if let error = error as NSError?,
+         error.domain == kGIDSignInErrorDomain,
+         error.code == GIDSignInError.hasNoAuthInKeychain.rawValue {
+        self.fail(.noSignInAvailable, "No previous Google sign in to restore", error)
+        return
+      }
+      self.handle(user: user, serverAuthCode: nil, error: error)
+    }
+  }
+
+  private func handle(user: GIDGoogleUser?, serverAuthCode: String?, error: Error?) {
+    if let error = error {
+      let nsError = error as NSError
+      if nsError.domain == kGIDSignInErrorDomain,
+         nsError.code == GIDSignInError.canceled.rawValue {
+        succeed(CredentialFactory.fromCancelled())
+      } else if Self.isBrowserUnavailable(nsError) {
+        fail(.browserUnavailable, error.localizedDescription, error)
+      } else {
+        fail(.invalidResult, error.localizedDescription, error)
+      }
+      return
+    }
+
+    guard let user = user else {
+      fail(.invalidResult, "No user returned")
+      return
+    }
+
+    succeed(CredentialFactory.fromGoogleId(user: user, serverAuthCode: serverAuthCode))
+  }
+
+  /// GIDSignIn reports a failed ASWebAuthenticationSession start as an unknown error that only
+  /// keeps AppAuth's "Unable to open Safari." message (OIDErrorCodeSafariOpenError = -9).
+  private static func isBrowserUnavailable(_ error: NSError) -> Bool {
+    if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError,
+       underlying.domain == "org.openid.appauth.general",
+       underlying.code == -9 {
+      return true
+    }
+    return error.domain == kGIDSignInErrorDomain
+      && error.code == GIDSignInError.unknown.rawValue
+      && error.localizedDescription.contains("Unable to open Safari")
   }
 }

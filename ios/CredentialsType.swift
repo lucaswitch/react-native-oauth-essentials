@@ -4,4 +4,5 @@ public enum CredentialsType: String {
   case appleId = "APPLE_ID"
   case cancelled = "CANCELLED"
   case passkey = "PASSKEY"
+  case redirect = "REDIRECT"
 }
