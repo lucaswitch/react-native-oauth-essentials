@@ -1,7 +1,7 @@
 # About
 
 **React Native OAuth Essentials** is an essential OAuth solution for React Native apps. It provides **up-to-date Google
-Sign-In, Apple Sign-In, and Password Sign-In**, delivering a **native sign-in experience** with a simple, promise-based
+Sign-In, Apple Sign-In, saved passwords, passkeys and generic OAuth 2.0 / OpenID Connect**, delivering a **native sign-in experience** with a simple, promise-based
 API. It's a must-have for every React Native app.
 
 ## Installation
@@ -23,159 +23,52 @@ Please jump to our docs website
 [Docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/intro)
 [Installation](https://lucaswitch.github.io/react-native-oauth-essentials/docs/installation)
 
-### Platform Support Details
+Using a coding agent? Paste the [setup prompt for AI agents](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) to install and configure everything.
 
-This library provides native OAuth implementations with platform-specific behaviors and requirements:
+Requires the **New Architecture**. Not supported in Expo Go (use a development build).
 
-#### Google Sign-In
+## Features
 
-**iOS:**
-- **Minimum:** iOS 13+
-- Uses native iOS Google Sign-In SDK
-- Presents native iOS authentication UI
-- No Google Play Services dependency
-- Requires Google OAuth 2.0 Web Client ID from Google Cloud Console
-- Supports One Tap sign-in experience
-- Available: `GOOGLE_ID_SUPPORTED` constant
+| Feature | iOS | Android |
+|---|---|---|
+| Google | GoogleSignIn SDK | Credential Manager (bottom sheet / "Sign in with Google" button flow) + Authorization API |
+| Apple | Native `AuthenticationServices` | Your web flow in a Custom Tab (needs a backend) |
+| Saved passwords | `ASAuthorizationPasswordProvider` | Credential Manager |
+| Passkeys | iOS 16+, including AutoFill | Android 9+ |
+| Hybrid (one picker at app start) | Apple ID + passwords | Google + passwords |
+| Any OAuth 2.0 / OpenID Connect provider | `ASWebAuthenticationSession` + PKCE | Custom Tab + PKCE |
 
-**Android:**
-- **Minimum:** Android 8.0+ (API 26+)
-- Uses Credential Manager API with Google ID provider
-- Requires Google Play Services to be installed and up-to-date
-- Check `GOOGLE_PLAY_SERVICES_SUPPORTED` before using
-- Supports additional options: `authorizedAccounts` and `autoSelectEnabled`
-- Presents native Android credential picker UI
-- Requires Google OAuth 2.0 Web Client ID from Google Cloud Console
-- Available: `GOOGLE_ID_SUPPORTED` constant
+Android features based on Credential Manager need Google Play Services. Exact per-platform behavior of every function:
+[Methods reference](https://lucaswitch.github.io/react-native-oauth-essentials/docs/methods).
 
-**Common Features:**
-- Returns standardized `GoogleIdCredentialResult` with user profile data
-- Includes ID token for backend verification
-- User can cancel, returning `CancelledCredentialResult`
-
----
-
-#### Apple Sign-In
-
-**iOS:**
-- **Minimum:** iOS 13+
-- Uses native `AuthenticationServices` framework
-- Presents native Apple Sign-In UI sheet
-- Full integration with iOS Keychain
-- Returns `AppleIdCredentialResult` with:
-  - ID token and authorization code
-  - User identifier (stable across app reinstalls)
-  - Email and full name (only on first sign-in)
-  - Real user indicator (`likelyReal`)
-- Caches email and fullName for subsequent sign-ins
-- No additional configuration needed
-- Available: `APPLE_ID_SUPPORTED` constant
-
-**Android:**
-- **Minimum:** Android 8.0+ (API 26+)
-- Uses browser-based OAuth flow via Chrome Custom Tabs (no native Apple Sign-In on Android)
-- Opens device's default browser with your provided `androidWebUrl`
-- Returns `WebAppleIdCredentialResult` with redirect URL components
-- **Requires backend implementation** to handle OAuth flow
-- You must implement Apple Sign-In REST API on your server
-- See [Apple Sign-In REST API Documentation](https://developer.apple.com/documentation/signinwithapplerestapi)
-- Available: `APPLE_ID_SUPPORTED` constant
-
-**Implementation Note:** iOS provides a complete native experience, while Android uses Chrome Custom Tabs to open your OAuth endpoint in the browser, then captures the redirect URL.
-
----
-
-#### Password Sign-In
-
-**iOS:**
-- **Minimum:** iOS 12+
-- Uses iOS Keychain Services
-- Integrates with iCloud Keychain for sync across devices
-- Presents native password autofill UI
-- Supports AutoFill in WebViews
-- Available: `PASSWORD_SUPPORTED` constant
-
-**Android:**
-- **Minimum:** Android 7.0+ (API 24+)
-- Uses Credential Manager API
-- Integrates with Google Smart Lock for Passwords
-- Can sync credentials across devices via Google account
-- Presents native credential picker UI
-- Supports autofill in WebViews and native forms
-- Available: `PASSWORD_SUPPORTED` constant
-
-**Common Features:**
-- `passwordSignIn()` - Saves credentials securely
-- `getPassword()` - Retrieves stored credentials
-- Returns `PasswordCredentialResult` with username and password
-- Can be used alongside biometric authentication
-- Returns `false` if no credentials stored
-
----
-
-#### Hybrid Sign-In
-
-**Purpose:** Attempts all available sign-in methods simultaneously to find existing credentials.
-
-**iOS:**
-- Checks for: Apple ID, Google ID, and saved passwords
-- Presents unified credential picker if multiple options available
-- Returns first available credential
-- Ideal for app launch to restore previous session
-- Available: `HYBRID_SUPPORTED` constant
-
-**Android:**
-- Checks for: Google ID and saved passwords (Apple requires web flow)
-- Uses Credential Manager to aggregate all options
-- Presents native Android credential picker
-- Returns first selected credential
-- Available: `HYBRID_SUPPORTED` constant
-
-**Use Case:** Perfect for "Continue with..." screens or automatic sign-in on app start.
-
-**Returns:**
-- `GoogleIdCredentialResult`
-- `AppleIdCredentialResult` (iOS only)
-- `PasswordCredentialResult`
-- `CancelledCredentialResult`
-
----
-
-#### Passkeys
-
-**iOS:**
-- Uses `AuthenticationServices` framework (iOS 16+)
-- Supports WebAuthn/FIDO2 standard
-- Syncs via iCloud Keychain
-- Presents native passkey creation/selection UI
-- Available: `PASSKEYS_SUPPORTED` constant (iOS 16+)
-
-**Android:**
-- Uses Credential Manager API with passkey support (Android 9+ / API 28+)
-- Supports WebAuthn/FIDO2 standard
-- Syncs via Google Password Manager
-- Additional options: `preferImmediatelyAvailableCredentials`, `isConditional`
-- Available: `PASSKEYS_SUPPORTED` constant
-
-**Common Features:**
-- Standards-based implementation (WebAuthn)
-- Requires `requestJson` string with `PublicKeyCredentialCreationOptions`
-- Returns `PassKeyCredentialResult` with platform public key credential
-- More secure than passwords (phishing-resistant)
-- Biometric authentication integration
-
----
+## API
 
 ### Import
 
 ```typescript
 import {
+  // Google
   googleSignIn,
+  googleSilentSignIn,
+  signOut,
+  // Apple
   appleSignIn,
-  passwordSignIn,
+  getAppleIdCredentialState,
+  // Passwords
   getPassword,
+  passwordSignIn,
+  // Hybrid
   hybridSignIn,
+  // Passkeys
   createPassKey,
+  getPassKey,
+  cancelPassKeyAutoFill,
+  // Generic OAuth / OpenID Connect
+  oauthSignIn,
+  // Events
+  addCredentialSuccessListener,
+  addCredentialFailureListener,
+  addAppleIdCredentialRevokedListener,
   // Constants
   GOOGLE_PLAY_SERVICES_SUPPORTED,
   PASSWORD_SUPPORTED,
@@ -183,352 +76,313 @@ import {
   APPLE_ID_SUPPORTED,
   HYBRID_SUPPORTED,
   PASSKEYS_SUPPORTED,
-  // Types
-  type GoogleSignInOptions,
-  type PasskeyOptions,
-  type GoogleIdCredentialResult,
-  type AppleIdCredentialResult,
-  type WebAppleIdCredentialResult,
-  type PasswordCredentialResult,
-  type PassKeyCredentialResult,
-  type CancelledCredentialResult,
+  OAUTH_REDIRECT_URI,
+  // Enums
   CredentialsType,
   CredentialError,
+  AppleIdCredentialState,
 } from 'react-native-oauth-essentials';
 ```
 
+### Conventions
+
+- Dismissing the UI **resolves** `{ type: CredentialsType.CANCELLED, data: null }` instead of rejecting.
+- Errors reject with `error.code` from `CredentialError`.
+- iOS rejects a second call of the same flow while the first is pending with `SIMULTANEOUS_CALL_ERROR`.
+
 ### Constants
 
-Check platform support before using OAuth methods:
+| Constant | iOS | Android |
+|---|---|---|
+| `GOOGLE_PLAY_SERVICES_SUPPORTED` | `false` | Play Services installed and up to date |
+| `GOOGLE_ID_SUPPORTED` | `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
+| `PASSWORD_SUPPORTED` | `true` | `true` (the methods still need Play Services) |
+| `APPLE_ID_SUPPORTED` | `true` | `true` (web flow) |
+| `HYBRID_SUPPORTED` | `true` | `true` (the method still needs Play Services) |
+| `PASSKEYS_SUPPORTED` | iOS 16+ | Android 9+ |
+| `OAUTH_REDIRECT_URI` | `<bundle id, lowercased>://oauth/callback` | `<applicationId>://oauth/callback` |
 
-| Constant | Type | Description |
-|----------|------|-------------|
-| `GOOGLE_PLAY_SERVICES_SUPPORTED` | `boolean` | Google Play Services are available. Always `false` on iOS. |
-| `PASSWORD_SUPPORTED` | `boolean` | Password credential manager is supported on this device. |
-| `GOOGLE_ID_SUPPORTED` | `boolean` | Google Sign-In is supported. **Use this to check if you can use `googleSignIn()`**. |
-| `APPLE_ID_SUPPORTED` | `boolean` | Apple Sign-In is supported on this device. |
-| `HYBRID_SUPPORTED` | `boolean` | Hybrid sign-in is supported (multiple methods at once). |
-| `PASSKEYS_SUPPORTED` | `boolean` | Passkeys are supported on this device. |
+### Google
 
-**Example:**
+#### `googleSignIn(clientId, options?)`
 
-```typescript
-if (GOOGLE_ID_SUPPORTED) {
-  await googleSignIn('YOUR_WEB_CLIENT_ID');
-}
-```
-
-### Methods
-
-#### `googleSignIn(webClientId, options?)`
-
-Performs Google Sign-In with native UI.
-
-**Parameters:**
-- `webClientId` (string): Your Google OAuth 2.0 web client ID
-- `options` (GoogleSignInOptions, optional): Sign-in configuration
-
-**Returns:** `Promise<GoogleIdCredentialResult | CancelledCredentialResult>`
-
-**Platform:** Android, iOS (check `GOOGLE_ID_SUPPORTED`)
-
-**Example:**
+Shows the Google sign in UI. Pass the **iOS client id on iOS** and the **web client id on Android**. iOS also needs the
+reversed iOS client id as a URL scheme in `Info.plist`.
 
 ```typescript
-const result = await googleSignIn('YOUR_WEB_CLIENT_ID', {
-  authorizedAccounts: true, // Android only
-  autoSelectEnabled: false, // Android only
+const result = await googleSignIn(Platform.select({ ios: IOS_CLIENT_ID, default: WEB_CLIENT_ID })!, {
+  mode: 'button',                // Android: full "Sign in with Google" flow (use it for button taps)
+  serverClientId: WEB_CLIENT_ID, // iOS: idToken audience and serverAuthCode
+  nonce,                         // embedded in the idToken
+  scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
 });
 
 if (result.type === CredentialsType.GOOGLE_ID) {
-  console.log('User ID:', result.data.id);
-  console.log('ID Token:', result.data.idToken);
-  console.log('Name:', result.data.displayName);
+  await api.signInWithGoogle(result.data.idToken);
 }
 ```
 
----
+**Returns:** `Promise<GoogleIdCredentialResult | CancelledCredentialResult>`
 
-#### `appleSignIn(androidWebUrl?)`
+#### `googleSilentSignIn(clientId, options?)`
 
-Initiates Apple Sign-In process.
-
-**Parameters:**
-- `androidWebUrl` (string, optional): Web URL for Android OAuth flow. **Required on Android.**
-
-**Returns:** `Promise<AppleIdCredentialResult | WebAppleIdCredentialResult>`
-
-**Platform:**
-- iOS: Native Apple Sign-In UI
-- Android: Opens browser with your web URL for OAuth flow
-
-**Platform:** Check `APPLE_ID_SUPPORTED`
-
-**Example:**
+Restores a previous Google sign in, without UI on iOS (and on Android when a single account signed in before). Rejects
+with `NO_SIGN_IN_AVAILABLE` when there is nothing to restore.
 
 ```typescript
-const result = await appleSignIn('https://yourserver.com/apple-signin');
+try {
+  const result = await googleSilentSignIn(GOOGLE_CLIENT_ID);
+} catch (e) {
+  if (e.code === CredentialError.NO_SIGN_IN_AVAILABLE) showSignInScreen();
+}
+```
+
+#### `signOut()`
+
+Clears the Google session on iOS and the Credential Manager state on Android (no auto select until the user picks an
+account again). **Returns:** `Promise<true>`
+
+### Apple
+
+#### `appleSignIn(androidWebUrl?, options?)`
+
+- iOS: native sheet. `options`: `{ nonce?, state? }`. Apple only sends `email`/`fullName` on the first authorization;
+  the library caches them in memory, so store them on your backend.
+- Android: opens `androidWebUrl` in a Custom Tab. Your backend runs the Apple web flow and redirects to
+  `<applicationId>://oauth/callback`. `options` are ignored.
+
+```typescript
+const result = await appleSignIn('https://api.example.com/auth/apple', { nonce: sha256(rawNonce) });
 
 if (result.type === CredentialsType.APPLE_ID) {
-  // iOS result
-  console.log('User:', result.data.user);
-  console.log('ID Token:', result.data.idToken);
-  console.log('Email:', result.data.email);
+  await api.signInWithApple(result.data.idToken, result.data.fullName); // iOS
 } else if (result.type === CredentialsType.WEB_APPLE_ID) {
-  // Android result
-  console.log('Redirect URL:', result.data.url);
+  await api.finishAppleWebFlow(result.data.url); // Android
 }
 ```
 
----
+**Returns:** `Promise<AppleIdCredentialResult | WebAppleIdCredentialResult | CancelledCredentialResult>`
 
-#### `passwordSignIn(username, password)`
+#### `getAppleIdCredentialState(userId)` (iOS)
 
-Saves username/password credentials to the platform's credential manager.
-
-**Parameters:**
-- `username` (string): Username to save
-- `password` (string): Password to save
-
-**Returns:** `Promise<boolean>`
-
-**Platform:** Android, iOS (check `PASSWORD_SUPPORTED`)
-
-**Example:**
+Checks without UI whether the Apple ID `user` is still signed in to the app. Call it on app start.
 
 ```typescript
-const saved = await passwordSignIn('user@example.com', 'password123');
-console.log('Credentials saved:', saved);
+const state = await getAppleIdCredentialState(storedAppleUserId);
+if (state !== AppleIdCredentialState.AUTHORIZED) signOutLocally(); // REVOKED, NOT_FOUND, TRANSFERRED
 ```
 
----
+Rejects with `NOT_SUPPORTED_ERROR` on Android.
+
+### Passwords
 
 #### `getPassword()`
 
-Retrieves stored password credentials.
-
-**Returns:** `Promise<false | PasswordCredentialResult>`
-
-**Platform:** Android, iOS (check `PASSWORD_SUPPORTED`)
-
-**Example:**
+Shows the passwords saved for the app. **Returns:** `Promise<false | PasswordCredentialResult>`. When there is no
+password or the user dismisses it, iOS resolves the `CANCELLED` result and Android resolves `false`.
 
 ```typescript
 const result = await getPassword();
-
 if (result && result.type === CredentialsType.PASSWORD) {
-  console.log('Username:', result.data.username);
-  console.log('Password:', result.data.password);
-} else {
-  console.log('No stored password found');
+  await api.signIn(result.data.username, result.data.password);
 }
 ```
 
----
+#### `passwordSignIn(username, password)`
+
+Saves a password in the password manager (it does not authenticate). Android shows the save prompt and resolves `true`
+when saved. iOS resolves `false` without doing anything: use `textContentType` on your inputs instead.
+
+### Hybrid
 
 #### `hybridSignIn(googleClientId, options?)`
 
-Attempts all available sign-in methods at once. Useful on app start to check for existing credentials.
+One picker with the credentials the user already has, meant for app start. iOS offers Apple ID + saved passwords (the
+Google client id is ignored); Android offers Google + saved passwords.
 
-**Parameters:**
-- `googleClientId` (string): Your Google OAuth 2.0 web client ID
-- `options` (GoogleSignInOptions, optional): Google sign-in configuration
+```typescript
+const result = await hybridSignIn(WEB_CLIENT_ID, { authorizedAccounts: true });
+if (result.type === CredentialsType.CANCELLED) showSignInScreen();
+```
 
 **Returns:** `Promise<AppleIdCredentialResult | GoogleIdCredentialResult | PasswordCredentialResult | CancelledCredentialResult>`
 
-**Platform:** Android, iOS (check `HYBRID_SUPPORTED`)
+### Passkeys
 
-**Example:**
+Your server generates the WebAuthn options and verifies the responses. Needs `webcredentials:` Associated Domains on iOS
+and `assetlinks.json` on Android.
+
+#### `createPassKey({ requestJson })`
+
+Registers a passkey from a `PublicKeyCredentialCreationOptions` JSON string. `result.data` is the registration response
+JSON to send to the server.
+
+#### `getPassKey({ requestJson, mediation? })`
+
+Signs in with a passkey from a `PublicKeyCredentialRequestOptions` JSON string. On iOS, `mediation: 'autofill'` shows the
+passkeys in the keyboard of a `textContentType="username"` input instead of a sheet.
 
 ```typescript
-const result = await hybridSignIn('YOUR_WEB_CLIENT_ID');
-
-switch (result.type) {
-  case CredentialsType.GOOGLE_ID:
-    console.log('Google user:', result.data.displayName);
-    break;
-  case CredentialsType.APPLE_ID:
-    console.log('Apple user:', result.data.user);
-    break;
-  case CredentialsType.PASSWORD:
-    console.log('Username:', result.data.username);
-    break;
-  case CredentialsType.CANCELLED:
-    console.log('User cancelled');
-    break;
-}
+const result = await getPassKey({ requestJson: JSON.stringify(await api.passkeyOptions()) });
+if (result.type === CredentialsType.PASSKEY) await api.verifyPasskey(result.data);
 ```
 
----
+#### `cancelPassKeyAutoFill()`
 
-#### `createPassKey(options)`
+Cancels a pending `getPassKey({ mediation: 'autofill' })` (call it when the screen unmounts). Resolves `true` when there
+was one to cancel.
 
-Creates a new passkey credential.
+### Generic OAuth / OpenID Connect
 
-**Parameters:**
-- `options` (PasskeyOptions): Passkey creation configuration
+#### `oauthSignIn(options)`
 
-**Returns:** `Promise<PassKeyCredentialResult>`
-
-**Platform:** Check `PASSKEYS_SUPPORTED`
-
-**Example:**
+Authorization code flow with PKCE for any provider (GitHub, Microsoft, Auth0, Keycloak…). Register `OAUTH_REDIRECT_URI`
+(or your own `redirectUri`) in the provider.
 
 ```typescript
-const result = await createPassKey({
-  requestJson: JSON.stringify({ /* PublicKeyCredentialCreationOptions */ }),
-  preferImmediatelyAvailableCredentials: true, // Android only
-  isConditional: false, // Android only
+const result = await oauthSignIn({
+  authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+  clientId: GITHUB_CLIENT_ID,
+  scopes: ['read:user', 'user:email'],
+  // tokenEndpoint: exchanges the code on the device (public clients only, never with a client secret)
 });
 
-if (result.type === CredentialsType.PASSKEY) {
-  console.log('Passkey created:', result.data);
+if (result.type === CredentialsType.OAUTH) {
+  await api.exchangeCode(result.data.code, result.data.codeVerifier, result.data.redirectUri);
 }
 ```
 
----
+**Returns:** `Promise<OAuthCredentialResult | CancelledCredentialResult>`
 
-### Type Definitions
+### Events
 
-#### `GoogleSignInOptions`
+```typescript
+const success = addCredentialSuccessListener(({ type }) => analytics.track('sign_in', { type }));
+const failure = addCredentialFailureListener(({ code }) => analytics.track('sign_in_error', { code }));
+const revoked = addAppleIdCredentialRevokedListener(() => signOutLocally()); // iOS
+
+success.remove();
+```
+
+Success and failure fire for `googleSignIn`, `googleSilentSignIn`, `getPassword`, `appleSignIn`, `hybridSignIn`,
+`createPassKey` and `getPassKey`.
+
+### Options
 
 ```typescript
 type GoogleSignInOptions = {
-  authorizedAccounts?: boolean;  // Android only: Filter to authorized accounts
-  autoSelectEnabled?: boolean;   // Android only: Enable auto-selection
+  mode?: 'bottomSheet' | 'button'; // Android
+  authorizedAccounts?: boolean;    // Android: only accounts that signed in before
+  autoSelectEnabled?: boolean;     // Android
+  nonce?: string;
+  hint?: string;                   // iOS: email to preselect
+  hostedDomain?: string;           // Google Workspace domain
+  scopes?: string[];
+  offlineAccess?: boolean;         // Android: returns serverAuthCode
+  serverClientId?: string;         // iOS: idToken audience + serverAuthCode. Android: serverAuthCode client id
 };
-```
 
-#### `PasskeyOptions`
+type AppleSignInOptions = { nonce?: string; state?: string }; // iOS
 
-```typescript
 type PasskeyOptions = {
-  requestJson: string;                             // JSON string of PublicKeyCredentialCreationOptions
-  preferImmediatelyAvailableCredentials?: boolean; // Android only
-  isConditional?: boolean;                         // Android only
+  requestJson: string;
+  preferImmediatelyAvailableCredentials?: boolean; // Android
+  mediation?: 'modal' | 'autofill';                // iOS 16+
+};
+
+type OAuthSignInOptions = {
+  authorizationEndpoint: string;
+  clientId: string;
+  redirectUri?: string;                         // default OAUTH_REDIRECT_URI
+  scopes?: string[];
+  additionalParameters?: Record<string, string>;
+  tokenEndpoint?: string;
+  usePKCE?: boolean;                            // default true
+  prefersEphemeralSession?: boolean;            // iOS
 };
 ```
 
----
-
-### Result Types
-
-#### `GoogleIdCredentialResult`
+### Results
 
 ```typescript
 type GoogleIdCredentialResult = {
   type: CredentialsType.GOOGLE_ID;
   data: {
-    id: string;                      // User's Google ID
-    idToken: string;                 // JWT ID token
-    displayName: string;             // Full name
-    givenName: string;               // First name
-    familyName: string;              // Last name
-    profilePictureUri?: string | null;  // Profile picture URL
-    phoneNumber?: string | null;     // Phone number (if available)
+    id: string;                        // iOS: Google user id (sub). Android: email
+    idToken: string;
+    displayName: string;
+    givenName: string;
+    familyName: string;
+    email?: string;
+    profilePictureUri?: string | null;
+    phoneNumber?: string | null;       // Android
+    accessToken?: string | null;
+    serverAuthCode?: string | null;
+    grantedScopes?: string[] | null;
   };
 };
-```
 
-#### `AppleIdCredentialResult`
-
-```typescript
 type AppleIdCredentialResult = {
   type: CredentialsType.APPLE_ID;
   data: {
-    idToken: string;                 // JWT ID token
-    authorizationCode: string;       // Authorization code
-    user: string;                    // Unique user identifier
-    email: string;                   // User's email
-    fullName: string;                // Full name
-    likelyReal: boolean;             // Indicates if user is likely real
+    idToken: string;
+    authorizationCode: string;
+    user: string;                      // stable Apple user id
+    email: string;
+    fullName: string;
+    likelyReal: boolean;
+    state?: string | null;
   };
 };
-```
 
-#### `WebAppleIdCredentialResult`
-
-Android-specific result when using web-based Apple Sign-In:
-
-```typescript
 type WebAppleIdCredentialResult = {
-  type: CredentialsType.WEB_APPLE_ID;
-  data: {
-    url: string;                     // Full redirect URL
-    scheme: string | null;           // URL scheme
-    host: string | null;             // URL host
-    path: string | null;             // URL path
-    query: string | null;            // URL query parameters
-  };
+  type: CredentialsType.WEB_APPLE_ID;  // Android
+  data: { url: string; scheme: string | null; host: string | null; path: string | null; query: string | null };
 };
-```
 
-#### `PasswordCredentialResult`
-
-```typescript
 type PasswordCredentialResult = {
   type: CredentialsType.PASSWORD;
-  data: {
-    username: string;                // Stored username
-    password: string;                // Stored password
-  };
+  data: { username: string; password: string };
 };
-```
 
-#### `PassKeyCredentialResult`
-
-```typescript
 type PassKeyCredentialResult = {
   type: CredentialsType.PASSKEY;
-  data: string;                      // JSON string of platform public key credential
+  data: string;                        // WebAuthn response JSON
 };
-```
 
-#### `CancelledCredentialResult`
-
-```typescript
-type CancelledCredentialResult = {
-  type: CredentialsType.CANCELLED;
-  data: null;                        // User cancelled the operation
+type OAuthCredentialResult = {
+  type: CredentialsType.OAUTH;
+  data: {
+    code: string;
+    state: string;
+    redirectUri: string;
+    codeVerifier: string | null;
+    params: Record<string, string>;    // all redirect parameters
+    tokens: Record<string, unknown> | null; // token endpoint response
+  };
 };
+
+type CancelledCredentialResult = { type: CredentialsType.CANCELLED; data: null };
 ```
 
----
+### Error codes
 
-### Credential Types Enum
-
-```typescript
-enum CredentialsType {
-  GOOGLE_ID = 'GOOGLE_ID',           // Google Sign-In credential
-  PASSWORD = 'PASSWORD',              // Username/password credential
-  APPLE_ID = 'APPLE_ID',             // iOS native Apple Sign-In credential
-  WEB_APPLE_ID = 'WEB_APPLE_ID',     // Android web-based Apple Sign-In credential
-  CANCELLED = 'CANCELLED',            // User cancelled the sign-in flow
-  PASSKEY = 'PASSKEY',               // Passkey credential
-}
-```
-
----
-
-### Error Codes
-
-```typescript
-enum CredentialError {
-  NO_PLAY_SERVICES_ERROR = 'NO_PLAY_SERVICES_ERROR',    // Google Play Services unavailable
-  NO_ACTIVITY_ERROR = 'NO_ACTIVITY_ERROR',              // No Android activity available
-  INVALID_RESULT_ERROR = 'INVALID_RESULT_ERROR',        // Invalid result from native module
-}
-```
-
-**Error Handling:**
+| `CredentialError` | When |
+|---|---|
+| `NOT_SUPPORTED_ERROR` | No Play Services (Android), passkeys on old OS, `getAppleIdCredentialState` on Android |
+| `NO_ACTIVITY_ERROR` | No activity / view controller to present the UI |
+| `NO_SIGN_IN_AVAILABLE` | Nothing to return: no previous sign in, account or passkey |
+| `BROWSER_UNAVAILABLE` | Browser session could not open (iOS: app not active, Guided Access; Android: no browser) |
+| `SIMULTANEOUS_CALL_ERROR` | iOS: the same flow is still pending |
+| `INVALID_RESULT_ERROR` | The provider failed or returned an unexpected result (`message` has the details) |
+| `NO_PLAY_SERVICES_ERROR` | Deprecated, never thrown |
 
 ```typescript
 try {
-  const result = await googleSignIn('YOUR_WEB_CLIENT_ID');
-} catch (error) {
-  if (error.code === CredentialError.NO_PLAY_SERVICES_ERROR) {
-    console.error('Google Play Services not available');
-  }
+  await googleSignIn(GOOGLE_CLIENT_ID);
+} catch (e) {
+  if (e.code === CredentialError.BROWSER_UNAVAILABLE) showRetryMessage();
+  else if (e.code === CredentialError.NOT_SUPPORTED_ERROR) showUpdatePlayServicesMessage();
 }
 ```
 

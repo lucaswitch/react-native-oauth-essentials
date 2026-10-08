@@ -298,6 +298,8 @@ Network errors and non-JSON token responses are thrown as-is, without a `code`. 
 
 ## Events
 
+See also the [Events guide](./usage/events.md).
+
 ### `addCredentialSuccessListener(listener)`
 
 Called with the same `{ type, data }` the promise resolves with, including `CANCELLED`. It fires for `googleSignIn`,
