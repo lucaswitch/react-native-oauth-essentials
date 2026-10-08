@@ -12,6 +12,7 @@ import { Button } from './Button';
 import {
   APPLE_ID_SUPPORTED,
   appleSignIn,
+  CredentialsType,
   getPassword,
   GOOGLE_ID_SUPPORTED,
   googleSignIn,
@@ -30,13 +31,18 @@ console.log('PLATFORM SUPPORT', {
   HYBRID_SUPPORTED,
 });
 
-// Replace with your own OAuth Android Client ID for Android on page: https://console.cloud.google.com/auth/clients
-const GOOGLE_WEB_CLIENT_ID = Config.GOOGLE_WEB_CLIENT_ID; // Setup in .env GOOGLE_WEB_CLIENT_ID=...
+// Client ids from https://console.cloud.google.com/auth/clients, set in example/.env:
+// GOOGLE_WEB_CLIENT_ID=... (required) and GOOGLE_IOS_CLIENT_ID=... (iOS; or GIDClientID in Info.plist)
+const GOOGLE_WEB_CLIENT_ID = Config.GOOGLE_WEB_CLIENT_ID;
 if (typeof GOOGLE_WEB_CLIENT_ID !== 'string') {
   throw new Error(
     'GOOGLE_WEB_CLIENT_ID must be a string, please set it inside the example/.env, if its already set please run: npx react-native-integrate react-native-config'
   );
 }
+const GOOGLE_CLIENT_IDS = {
+  iosClientId: Config.GOOGLE_IOS_CLIENT_ID,
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+};
 
 export default function App() {
   const [signInMenu, setSignInMenu] = useState(false);
@@ -45,7 +51,7 @@ export default function App() {
 
   async function onGoogleSignInPress() {
     try {
-      const result = await googleSignIn(GOOGLE_WEB_CLIENT_ID as string);
+      const result = await googleSignIn(GOOGLE_CLIENT_IDS);
       console.log('success', result);
     } catch (err) {
       Alert.alert('error', (err as Error).message);
@@ -63,24 +69,19 @@ export default function App() {
 
   async function onPasswordSignInPress() {
     try {
-      let result = await getPassword();
-      if (result) {
+      const result = await getPassword();
+      if (result.type !== CredentialsType.CANCELLED) {
         console.log('success', result);
         setSignInMenu(false);
+      } else if (!signInMenu) {
+        setSignInMenu(true);
       } else {
-        if (!signInMenu) {
-          setSignInMenu(true);
-        } else {
-          if (!result) {
-            await passwordSignIn(username, password);
-            result = await getPassword();
-            if (!result) {
-              throw new Error('Could not save the credentials on the OS.');
-            }
-            setSignInMenu(false);
-            console.log('success', 'saved password successfully');
-          }
+        const saved = await passwordSignIn(username, password);
+        if (!saved) {
+          throw new Error('Could not save the credentials on the OS.');
         }
+        setSignInMenu(false);
+        console.log('success', 'saved password successfully');
       }
     } catch (err) {
       Alert.alert('error', (err as Error).message);
@@ -89,7 +90,7 @@ export default function App() {
 
   useEffect(() => {
     if (HYBRID_SUPPORTED)
-      hybridSignIn(GOOGLE_WEB_CLIENT_ID as string)
+      hybridSignIn(GOOGLE_CLIENT_IDS)
         .then((result) => console.log('success', result))
         .catch(console.error);
   }, []);

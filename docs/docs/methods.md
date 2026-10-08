@@ -12,7 +12,8 @@ resolves, what it rejects with and which events it emits.
 - **Cancellation resolves.** When the user dismisses the UI, methods resolve `{ type: 'CANCELLED', data: null }`
   instead of rejecting (exceptions are noted per method).
 - **Errors reject** with an `Error` that has a `code` from [`CredentialError`](./types#credentialerror) and the native
-  error text in `message`.
+  error text in `message`. Every rejection of the library has a `code`; narrow it with
+  [`isCredentialError`](#iscredentialerrorerror-code).
 - **Events.** Credential methods also report their result through `addCredentialSuccessListener` /
   `addCredentialFailureListener` (see [Events](#events)).
 - **Simultaneous calls (iOS).** Calling a method again while its previous call is pending rejects the new call with
@@ -20,25 +21,63 @@ resolves, what it rejects with and which events it emits.
   `getPassword`, `hybridSignIn`, `appleSignIn`, `createPassKey` + `getPassKey`, and `oauthSignIn`. Android has no lock,
   except that `appleSignIn` and `oauthSignIn` share the browser: starting one resolves the pending one as `CANCELLED`.
 - **Threading (iOS).** Every method runs on the main thread.
+- **Development warnings.** See [Ignored options](#ignored-options).
+
+### Ignored options
+
+In development (`__DEV__`), passing an option that has no effect on the current platform logs a `console.warn` once per
+method and option: `[react-native-oauth-essentials] <method>: "<option>" is ignored on <Platform>.` Release builds never
+warn.
+
+| Method | iOS warns for | Android warns for |
+|---|---|---|
+| `googleSignIn` | `authorizedAccounts`, `autoSelectEnabled`, `mode`, `offlineAccess` | `hint` |
+| `googleSilentSignIn` | `authorizedAccounts`, `autoSelectEnabled`, `mode`, `offlineAccess`, `hint`, `scopes`, `nonce` | `hint`, `mode` |
+| `hybridSignIn` | any client id, and every option except `nonce` | `hint`, `mode`, `scopes`, `offlineAccess`, `hostedDomain`, `serverClientId` |
+| `appleSignIn` | | `nonce`, `state` |
+| `createPassKey`, `getPassKey` | `preferImmediatelyAvailableCredentials: false` | `mediation: 'autofill'` |
+| `oauthSignIn` | | `prefersEphemeralSession` |
+| `passwordSignIn` | always (it does nothing on iOS) | |
+
+## Google client ids
+
+`googleSignIn`, `googleSilentSignIn` and `hybridSignIn` take a `clientId` of type
+[`GoogleClientId`](./types#googleclientid): `{ iosClientId?, webClientId? }` or a string.
+
+- **Object (recommended):** `{ iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID }`.
+  - iOS uses `iosClientId`, or the `GIDClientID` key of Info.plist when it is missing. `webClientId` is the default
+    `serverClientId` (idToken audience and `serverAuthCode`); when neither is set, `GIDServerClientID` from Info.plist is
+    used.
+  - Android uses `webClientId`. When it is missing, the method rejects with `CONFIGURATION_ERROR`.
+- **String:** used as is on both platforms, so it must be the iOS client id on iOS and the web client id on Android.
+
+On iOS, before calling GoogleSignIn, the library checks that a client id exists and that the reversed client id
+(`1234-abcd.apps.googleusercontent.com` becomes `com.googleusercontent.apps.1234-abcd`) is in
+`CFBundleURLTypes` > `CFBundleURLSchemes`. Otherwise it rejects with `CONFIGURATION_ERROR` (the `message` has the exact
+scheme to add) instead of letting GoogleSignIn crash the app. See [Installation](./installation.md#ios-setup) or the
+[Expo plugin](./expo.md).
 
 ## Google
 
-### `googleSignIn(webClientId, options?)`
+### `googleSignIn(clientId, options?)`
 
 Shows the Google sign in UI and resolves with the signed in account.
 
 **iOS**
 
-1. Configures GoogleSignIn with `webClientId` as the client id, plus `serverClientId` and `hostedDomain`.
-2. Rejects with `BROWSER_UNAVAILABLE` if Guided Access is on.
-3. If the app is not active, waits up to 2 seconds for it to become active, then rejects with `BROWSER_UNAVAILABLE`.
-4. Finds the top most view controller attached to a window (rejects with `NO_ACTIVITY_ERROR` when there is none).
-5. Calls `GIDSignIn.signIn(withPresenting:hint:additionalScopes:nonce:)`, which opens an `ASWebAuthenticationSession`.
+1. Resolves the client ids (see [Google client ids](#google-client-ids)) and rejects with `CONFIGURATION_ERROR` when
+   there is no iOS client id or its URL scheme is not in Info.plist.
+2. Configures GoogleSignIn with the iOS client id, plus `serverClientId` and `hostedDomain`.
+3. Rejects with `BROWSER_UNAVAILABLE` if Guided Access is on.
+4. If the app is not active, waits up to 2 seconds for it to become active, then rejects with `BROWSER_UNAVAILABLE`.
+5. Finds the top most view controller attached to a window (rejects with `NO_ACTIVITY_ERROR` when there is none).
+6. Calls `GIDSignIn.signIn(withPresenting:hint:additionalScopes:nonce:)`, which opens an `ASWebAuthenticationSession`.
    "Unable to open Safari." errors are reported as `BROWSER_UNAVAILABLE`.
 
 **Android**
 
-1. Rejects with `NOT_SUPPORTED_ERROR` without Google Play Services and `NO_ACTIVITY_ERROR` without an activity.
+1. Rejects with `CONFIGURATION_ERROR` without a web client id, `NOT_SUPPORTED_ERROR` without Google Play Services and
+   `NO_ACTIVITY_ERROR` without an activity.
 2. `mode: 'bottomSheet'` (default): Credential Manager `GetGoogleIdOption` with `authorizedAccounts`,
    `autoSelectEnabled` and `nonce`. When there is no credential (no account on the device, or the sheet is in cooldown
    after being dismissed) and `authorizedAccounts` is not set, it falls back to the button flow.
@@ -51,7 +90,7 @@ Shows the Google sign in UI and resolves with the signed in account.
 | | iOS | Android |
 |---|---|---|
 | Resolves | `GOOGLE_ID`, `CANCELLED` | `GOOGLE_ID`, `CANCELLED` |
-| Rejects | `BROWSER_UNAVAILABLE`, `NO_ACTIVITY_ERROR`, `SIMULTANEOUS_CALL_ERROR`, `INVALID_RESULT_ERROR` | `NOT_SUPPORTED_ERROR`, `NO_ACTIVITY_ERROR`, `NO_SIGN_IN_AVAILABLE`, `INVALID_RESULT_ERROR` |
+| Rejects | `CONFIGURATION_ERROR`, `BROWSER_UNAVAILABLE`, `NO_ACTIVITY_ERROR`, `SIMULTANEOUS_CALL_ERROR`, `INVALID_RESULT_ERROR` | `CONFIGURATION_ERROR`, `NOT_SUPPORTED_ERROR`, `NO_ACTIVITY_ERROR`, `NO_SIGN_IN_AVAILABLE`, `INVALID_RESULT_ERROR` |
 | Events | success / failure | success / failure |
 
 **Options per platform**
@@ -71,21 +110,25 @@ Shows the Google sign in UI and resolves with the signed in account.
 requested. `phoneNumber` is Android only.
 
 ```ts
-import { googleSignIn, CredentialsType, CredentialError } from 'react-native-oauth-essentials';
+import { googleSignIn, isCredentialError, CredentialsType, CredentialError } from 'react-native-oauth-essentials';
+
+const GOOGLE_CLIENT_IDS = { iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID };
 
 try {
-  const result = await googleSignIn('WEB_CLIENT_ID', { mode: 'button', nonce });
+  const result = await googleSignIn(GOOGLE_CLIENT_IDS, { mode: 'button', nonce });
   if (result.type === CredentialsType.GOOGLE_ID) {
     await api.signInWithGoogle(result.data.idToken);
   }
 } catch (e) {
-  if (e.code === CredentialError.BROWSER_UNAVAILABLE) {
+  if (isCredentialError(e, CredentialError.BROWSER_UNAVAILABLE)) {
     // ask the user to try again with the app in foreground
+  } else if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) {
+    console.error(e.message); // setup bug, e.g. the missing iOS URL scheme
   }
 }
 ```
 
-### `googleSilentSignIn(webClientId, options?)`
+### `googleSilentSignIn(clientId, options?)`
 
 Restores a previous Google sign in.
 
@@ -98,13 +141,14 @@ Restores a previous Google sign in.
   result has `accessToken: null` instead of being cancelled.
 
 Resolves `GOOGLE_ID` or `CANCELLED` (user dismissed the Android sheet). Rejects with `NO_SIGN_IN_AVAILABLE` when there is
-nothing to restore, plus the same errors as `googleSignIn`. Emits success / failure events.
+nothing to restore, plus the same errors as `googleSignIn` (including `CONFIGURATION_ERROR`). Takes the same
+`clientId`. Emits success / failure events.
 
 ```ts
 try {
-  const result = await googleSilentSignIn('WEB_CLIENT_ID');
+  const result = await googleSilentSignIn(GOOGLE_CLIENT_IDS);
 } catch (e) {
-  if (e.code === CredentialError.NO_SIGN_IN_AVAILABLE) showSignInScreen();
+  if (isCredentialError(e, CredentialError.NO_SIGN_IN_AVAILABLE)) showSignInScreen();
 }
 ```
 
@@ -124,19 +168,26 @@ Resolves `true`. Rejects with `INVALID_RESULT_ERROR` on Android when clearing fa
 Shows the app's saved passwords and resolves with the one the user picks.
 
 - **iOS:** `ASAuthorizationPasswordProvider` request. On iOS 16+ it only offers passwords already on the device. Resolves
-  `PASSWORD`, or the `CANCELLED` result (not `false`) when the user dismisses it or there is no saved password. Rejects
-  with `INVALID_RESULT_ERROR` on other errors and `SIMULTANEOUS_CALL_ERROR`.
-- **Android:** Credential Manager `GetPasswordOption`. Resolves `PASSWORD`, or `false` on any error (no password,
-  cancelled...). Rejects with `NOT_SUPPORTED_ERROR` without Play Services and `NO_ACTIVITY_ERROR`.
+  `PASSWORD`, or `CANCELLED` when the user dismisses it or there is no saved password. Rejects with
+  `INVALID_RESULT_ERROR` on other errors and `SIMULTANEOUS_CALL_ERROR`.
+- **Android:** Credential Manager `GetPasswordOption`. Resolves `PASSWORD`, or `CANCELLED` when the user dismisses it or
+  there is no saved password. Rejects with `NOT_SUPPORTED_ERROR` without Play Services, `NO_ACTIVITY_ERROR` and
+  `INVALID_RESULT_ERROR` on other errors.
 
-Emits the success event when it resolves a result object and the failure event when it rejects.
+Returns `Promise<PasswordCredentialResult | CancelledCredentialResult>`: it never resolves `false`. Emits the success
+event when it resolves (including `CANCELLED`) and the failure event when it rejects.
 
 ```ts
 const result = await getPassword();
-if (result && result.type === CredentialsType.PASSWORD) {
+if (result.type === CredentialsType.PASSWORD) {
   await api.signIn(result.data.username, result.data.password);
 }
 ```
+
+:::note Migrating to 1.1
+Before 1.1, Android resolved `false` when there was no password or on errors. Replace `if (!result)` /
+`result === false` checks with `result.type === CredentialsType.CANCELLED`.
+:::
 
 ### `passwordSignIn(username, password)`
 
@@ -195,24 +246,25 @@ if ((await getAppleIdCredentialState(storedUserId)) !== AppleIdCredentialState.A
 
 ## Hybrid
 
-### `hybridSignIn(googleClientId, options?)`
+### `hybridSignIn(clientId, options?)`
 
 Shows a single picker with the credentials the user already has, meant for app start. **The providers differ per
 platform:**
 
-- **iOS:** Apple ID + saved passwords. `googleClientId` is ignored, Google is **not** included, and only `options.nonce`
+- **iOS:** Apple ID + saved passwords. `clientId` is ignored, Google is **not** included, and only `options.nonce`
   is used (for Apple ID). On iOS 16+ only credentials already on the device are offered. Resolves `APPLE_ID` or
   `PASSWORD`, or `CANCELLED` when the user dismisses it or nothing is available. Rejects with `INVALID_RESULT_ERROR` and
   `SIMULTANEOUS_CALL_ERROR`.
-- **Android:** Credential Manager with Google ID (`GetGoogleIdOption` with `authorizedAccounts`, `autoSelectEnabled`,
-  `nonce`) + saved passwords. Apple is **not** included, and `mode`, `scopes`, `offlineAccess` and `hostedDomain` are
-  ignored. Resolves `GOOGLE_ID` or `PASSWORD`, or `CANCELLED`. Rejects with `NOT_SUPPORTED_ERROR` (no Play Services),
-  `NO_ACTIVITY_ERROR`, `NO_SIGN_IN_AVAILABLE` and `INVALID_RESULT_ERROR`.
+- **Android:** Credential Manager with Google ID (`GetGoogleIdOption` with the web client id, `authorizedAccounts`,
+  `autoSelectEnabled`, `nonce`) + saved passwords. Apple is **not** included, and `mode`, `hint`, `scopes`,
+  `offlineAccess`, `hostedDomain` and `serverClientId` are ignored. Resolves `GOOGLE_ID` or `PASSWORD`, or `CANCELLED`.
+  Rejects with `CONFIGURATION_ERROR` (no web client id), `NOT_SUPPORTED_ERROR` (no Play Services), `NO_ACTIVITY_ERROR`,
+  `NO_SIGN_IN_AVAILABLE` and `INVALID_RESULT_ERROR`.
 
 Emits success / failure events.
 
 ```ts
-const result = await hybridSignIn('WEB_CLIENT_ID', { authorizedAccounts: true });
+const result = await hybridSignIn(GOOGLE_CLIENT_IDS, { authorizedAccounts: true });
 ```
 
 ## Passkeys
@@ -287,13 +339,15 @@ and `tokens` (null without `tokenEndpoint`). Resolves `CANCELLED` when the user 
 
 Rejects with:
 
-- `INVALID_RESULT_ERROR`: state mismatch, provider error, no code, or the token endpoint returned non 2xx (`message` is
-  its `error_description`/`error`).
+- `INVALID_RESULT_ERROR`: state mismatch, provider error, no code, the token endpoint returned non 2xx (`message` is
+  its `error_description`/`error`) or a non JSON response.
+- `NETWORK_ERROR`: the token request failed (offline, DNS, TLS...).
+- `CONFIGURATION_ERROR`: `redirectUri` has no scheme.
 - `BROWSER_UNAVAILABLE`: iOS Guided Access, app not active within 2 seconds, or the session could not start; Android
   with no browser installed.
 - `NO_ACTIVITY_ERROR` (Android) and `SIMULTANEOUS_CALL_ERROR` (iOS).
 
-Network errors and non-JSON token responses are thrown as-is, without a `code`. Does not emit events. See
+Does not emit events, not even for rejections. See
 [OAuth Sign-In](./usage/oauth).
 
 ## Events
@@ -307,7 +361,8 @@ Called with the same `{ type, data }` the promise resolves with, including `CANC
 
 ### `addCredentialFailureListener(listener)`
 
-Called with `{ code, message }` when one of those methods rejects. These rejections are not emitted:
+Called with `{ code, message }` when one of those methods rejects (including `CONFIGURATION_ERROR`). These rejections
+are not emitted:
 
 - `SIMULTANEOUS_CALL_ERROR`;
 - iOS passkey `NOT_SUPPORTED_ERROR` below iOS 16;
@@ -340,8 +395,29 @@ Read once when the module loads.
 |---|---|---|
 | `GOOGLE_PLAY_SERVICES_SUPPORTED` | `false` | Play Services installed and up to date |
 | `GOOGLE_ID_SUPPORTED` | `true` | same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
-| `PASSWORD_SUPPORTED` | `true` | `true` (but `getPassword`/`passwordSignIn` need Play Services) |
+| `PASSWORD_SUPPORTED` | `true` | same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
 | `APPLE_ID_SUPPORTED` | `true` | `true` (web flow) |
-| `HYBRID_SUPPORTED` | `true` | `true` (but `hybridSignIn` needs Play Services) |
+| `HYBRID_SUPPORTED` | `true` | same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
 | `PASSKEYS_SUPPORTED` | iOS 16+ | Android 9+ (API 28) |
 | `OAUTH_REDIRECT_URI` | `<bundle id, lowercased>://oauth/callback` | `<applicationId>://oauth/callback` |
+
+## Errors
+
+### `isCredentialError(error, code?)`
+
+Type guard for a `catch`: returns `true` when `error` is an object whose `code` is a
+[`CredentialError`](./types#credentialerror) value (and equals `code` when given), narrowing it to
+[`OauthEssentialsError`](./types#oauthessentialserror) (`Error & { code }`). It never throws and does not check
+`instanceof Error`.
+
+```ts
+import { googleSignIn, isCredentialError, CredentialError } from 'react-native-oauth-essentials';
+
+try {
+  await googleSignIn(GOOGLE_CLIENT_IDS);
+} catch (e) {
+  if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) console.error(e.message);
+  else if (isCredentialError(e)) report(e.code);
+  else throw e;
+}
+```

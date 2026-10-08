@@ -41,6 +41,9 @@ To use passkeys on iOS, you must add the **Associated Domains** capability to yo
    webcredentials:yourdomain.com
    ```
 
+With Expo, use the [config plugin](../expo.md) instead: `"webCredentialsDomains": ["yourdomain.com"]` adds
+`webcredentials:yourdomain.com` (merged with your existing associated domains).
+
 > **📚 Reference:** See [Apple's guide on adding capabilities to your app](https://developer.apple.com/documentation/xcode/adding-capabilities-to-your-app) for detailed instructions.
 
 #### 2. Configure your Domain
@@ -95,7 +98,37 @@ const options = {
 
 ### Android Configuration
 
-Android passkeys work with the Credential Manager API. No additional domain configuration is required, but ensure your backend properly validates the passkey assertions.
+Android 9+ uses the Credential Manager API. Nothing to add to the app, but the `rp.id` domain must declare your app with
+a Digital Asset Links file at:
+```
+https://yourdomain.com/.well-known/assetlinks.json
+```
+
+```json
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.yourcompany.yourapp",
+      "sha256_cert_fingerprints": [
+        "AA:BB:CC:..."
+      ]
+    }
+  }
+]
+```
+
+Replace:
+- `package_name` with your `applicationId`
+- `sha256_cert_fingerprints` with the SHA-256 of **every** signing key: debug, release and the Play App Signing key
+  (Play Console > Setup > App signing). `cd android && ./gradlew signingReport` prints the debug and release ones
+
+Without it Credential Manager refuses the request for that `rp.id` and the method rejects. Your backend must also
+validate the passkey responses.
 
 ## Methods
 
@@ -264,6 +297,7 @@ Android `mediation` is ignored and `cancelPassKeyAutoFill` resolves `false`.
 |----------|-------------|--------|---------|
 | **iOS** | Add Associated Domain capability | `webcredentials:domain.com` | `webcredentials:myapp.com` |
 | **iOS** | Host apple-app-site-association | At `/.well-known/apple-app-site-association` | See iOS Configuration section |
+| **Android** | Host assetlinks.json | At `/.well-known/assetlinks.json` | See Android Configuration section |
 | **Both** | Use domain in passkey options | In `rp.id` or `rpId` field | `yourdomain.com` |
 
 ## Platform Differences
@@ -271,7 +305,7 @@ Android `mediation` is ignored and `cancelPassKeyAutoFill` resolves `false`.
 | Feature | iOS | Android |
 |---------|-----|---------|
 | **Minimum Version** | iOS 16+ | Android 9.0+ (API 28+) |
-| **Domain Setup** | Required (Associated Domain capability) | Not required |
+| **Domain Setup** | Required (Associated Domain capability + `apple-app-site-association`) | Required (`assetlinks.json`) |
 | **UI** | Native iOS modal | Native Android bottom sheet |
 | **Storage** | iCloud Keychain | Google Password Manager |
 | **Sync** | Across Apple devices | Across Google account devices |

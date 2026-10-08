@@ -37,14 +37,15 @@ You need to create **THREE** different OAuth client IDs for your app:
 
 ### 3.1. Web Application Client ID (Required)
 
-This is the **primary credential** used in your React Native code.
+This is the `webClientId` in your React Native code: Android passes it to Credential Manager, and iOS uses it as the
+default `serverClientId` (the `idToken` audience your backend verifies, and `serverAuthCode`).
 
 1. Click **Create Credentials** → **OAuth client ID**
 2. Select **Web application**
 3. Name it (e.g., "My App - Web Client")
 4. No need to add Authorized redirect URIs
 5. Click **Create**
-6. **Copy the Client ID** - you'll use this in your app code
+6. **Copy the Client ID** - it is your `webClientId`
 
 ### 3.2. iOS Client ID
 
@@ -54,7 +55,7 @@ This is the **primary credential** used in your React Native code.
 4. Enter your iOS **Bundle ID** (e.g., `com.yourcompany.yourapp`)
    - Find this in your `Info.plist` or Xcode project settings
 5. Click **Create**
-6. **Copy the iOS Client ID** - you'll need this for Platform.select()
+6. **Copy the iOS Client ID** - it is your `iosClientId`, and its reversed form is the iOS URL scheme
 
 ### 3.3. Android Client ID
 
@@ -63,7 +64,9 @@ This is the **primary credential** used in your React Native code.
 3. Name it (e.g., "My App - Android")
 4. Enter your Android **Package name** (e.g., `com.yourcompany.yourapp`)
    - Find this in `android/app/build.gradle` under `applicationId`
-5. Enter your **SHA-1 certificate fingerprint**:
+5. Enter your **SHA-1 certificate fingerprint**. Create one Android client per signing key: debug, release (upload) and
+   the **Play App Signing** key (Play Console > Setup > App signing), or Google Sign-In fails in the Play Store build.
+   `cd android && ./gradlew signingReport` prints the debug and release fingerprints:
 
    **For Development (Debug):**
    ```bash
@@ -80,30 +83,24 @@ This is the **primary credential** used in your React Native code.
    ```
 
 6. Click **Create**
-7. **Copy the Android Client ID** - you'll need this for Platform.select()
+7. You **never pass the Android Client ID in code**. Google only checks that one exists for your package name and
+   signature
 
 ## Step 4: Configure Your React Native App
 
-### 4.1. Use Platform.select() for Platform-Specific Client IDs
+### 4.1. Pass the client ids
 
 ```typescript
-import { Platform } from 'react-native';
 import { googleSignIn } from 'react-native-oauth-essentials';
 
-const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
-
-// Use Platform.select() to choose the correct client ID
-const googleClientId = Platform.select({
-  ios: GOOGLE_IOS_CLIENT_ID,
-  android: GOOGLE_ANDROID_CLIENT_ID,
-  default: GOOGLE_WEB_CLIENT_ID,
-});
+const GOOGLE_CLIENT_IDS = {
+  iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+  webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+};
 
 async function signIn() {
   try {
-    const credential = await googleSignIn(googleClientId);
+    const credential = await googleSignIn(GOOGLE_CLIENT_IDS);
     console.log('Signed in:', credential);
   } catch (error) {
     console.error('Sign in failed:', error);
@@ -111,27 +108,22 @@ async function signIn() {
 }
 ```
 
-**Important:** Use the **Web Client ID** as the parameter, and the iOS/Android Client IDs are registered with Google to allow your app to authenticate.
+Each platform picks the id it needs:
 
-Actually, the library uses the **Web Client ID** for both platforms. The iOS and Android Client IDs are registered with Google Cloud Console to authorize your apps, but you only pass the Web Client ID to the library:
+- **iOS** uses `iosClientId` (or `GIDClientID` from Info.plist when it is missing) and `webClientId` as the default
+  `serverClientId` (or `GIDServerClientID` from Info.plist).
+- **Android** uses `webClientId`. Without it the call rejects with `CONFIGURATION_ERROR`.
 
-```typescript
-const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
-
-async function signIn() {
-  try {
-    // Use Web Client ID for both iOS and Android
-    const credential = await googleSignIn(GOOGLE_WEB_CLIENT_ID);
-    console.log('Signed in:', credential);
-  } catch (error) {
-    console.error('Sign in failed:', error);
-  }
-}
-```
+A single string still works, but it is used as is: it must be the iOS client id on iOS and the web client id on Android.
+The Android client id is never passed.
 
 ### 4.2. iOS Configuration (Info.plist)
 
-You need to add a URL scheme to your iOS app's `Info.plist` file.
+You need to add a URL scheme to your iOS app's `Info.plist` file: the iOS client id split by `.`, reversed and joined.
+With Expo, the [config plugin](./expo.md) `google` option does it for you.
+
+When the scheme is missing, `googleSignIn` and `googleSilentSignIn` reject with `CONFIGURATION_ERROR` and the error
+`message` contains the exact scheme to add.
 
 **Location:** `ios/YourAppName/Info.plist`
 
@@ -269,13 +261,23 @@ Your reversed URL scheme should be:
 com.googleusercontent.apps.1234567890-abcdefghijklmnop
 ```
 
+Optionally, add the client ids to Info.plist too. iOS then reads them when `iosClientId` / `webClientId` are not passed:
+
+```xml
+<key>GIDClientID</key>
+<string>1234567890-abcdefghijklmnop.apps.googleusercontent.com</string>
+<key>GIDServerClientID</key>
+<string>YOUR_WEB_CLIENT_ID.apps.googleusercontent.com</string>
+```
+
 ### 4.3. Android Configuration
 
-No additional configuration needed! The library handles everything automatically.
+No native configuration needed.
 
 Just make sure:
+- You pass the **Web** client id as `webClientId` (not the Android one)
 - You created the Android OAuth client ID in Google Cloud Console
-- You added the correct SHA-1 certificate fingerprint
+- You added the SHA-1 of every signing key, including Play App Signing
 - Your package name matches
 
 ## Step 5: Verify Setup
@@ -295,6 +297,15 @@ Just make sure:
 
 ## Common Issues
 
+### iOS: `CONFIGURATION_ERROR`
+- The `message` says what is missing: the iOS client id (pass `iosClientId` or set `GIDClientID`) or the exact URL
+  scheme to add to `CFBundleURLSchemes`
+- Make sure `iosClientId` is the **iOS** client id: a web client id there produces a scheme that does not match
+- Rebuild the iOS app after changing Info.plist (or run `npx expo prebuild` with Expo)
+
+### Android: `CONFIGURATION_ERROR`
+- `webClientId` is missing: pass `{ webClientId }` (the web client id, not the Android one)
+
 ### iOS: "No application found to handle URL"
 - Verify your `CFBundleURLSchemes` matches your reversed iOS Client ID exactly
 - Make sure there are no typos or extra spaces
@@ -311,7 +322,7 @@ Just make sure:
 - Wait a few minutes after creating credentials (Google takes time to propagate changes)
 
 ### Both: "Invalid Client ID"
-- Double-check you're using the Web Client ID in your code
+- Double-check `iosClientId` is the iOS client id and `webClientId` the Web client id
 - Verify the client ID is copied correctly with no extra spaces
 - Make sure the iOS/Android client IDs are created and active in Google Cloud Console
 
@@ -341,35 +352,33 @@ Just make sure:
 
 ```typescript
 import React from 'react';
-import { Platform, Button, View, Text } from 'react-native';
+import { Button, View, Text } from 'react-native';
 import {
   googleSignIn,
+  isCredentialError,
   GOOGLE_ID_SUPPORTED,
-  GOOGLE_PLAY_SERVICES_SUPPORTED,
   CredentialsType,
+  CredentialError,
 } from 'react-native-oauth-essentials';
 
-// Your OAuth 2.0 Web Client ID from Google Cloud Console
-const GOOGLE_WEB_CLIENT_ID = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
+// Your OAuth 2.0 client ids from Google Cloud Console
+const GOOGLE_CLIENT_IDS = {
+  iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+  webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+};
 
 export default function GoogleSignInExample() {
   const [user, setUser] = React.useState(null);
 
   async function handleGoogleSignIn() {
-    // Check platform support
+    // Android: false without Google Play Services
     if (!GOOGLE_ID_SUPPORTED) {
-      alert('Google Sign-In is not supported on this platform');
-      return;
-    }
-
-    // Android: Check for Google Play Services
-    if (Platform.OS === 'android' && !GOOGLE_PLAY_SERVICES_SUPPORTED) {
-      alert('Google Play Services not available');
+      alert('Google Sign-In is not available on this device');
       return;
     }
 
     try {
-      const credential = await googleSignIn(GOOGLE_WEB_CLIENT_ID, {
+      const credential = await googleSignIn(GOOGLE_CLIENT_IDS, {
         authorizedAccounts: true,  // Android only
         autoSelectEnabled: false,  // Android only
       });
@@ -384,8 +393,11 @@ export default function GoogleSignInExample() {
         console.log('User cancelled sign-in');
       }
     } catch (error) {
+      if (isCredentialError(error, CredentialError.CONFIGURATION_ERROR)) {
+        console.error(error.message); // setup problem: missing client id or iOS URL scheme
+      }
       console.error('Google Sign-In Error:', error);
-      alert('Sign-in failed: ' + error.message);
+      alert('Sign-in failed');
     }
   }
 

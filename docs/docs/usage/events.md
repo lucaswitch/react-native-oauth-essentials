@@ -24,8 +24,9 @@ The event `type` is a `CredentialsType` value and `data` is the result `data` (s
 
 ### `addCredentialFailureListener(listener)`
 
-Called with `{ code, message }` when one of the methods above rejects (see
-[`CredentialFailureEvent`](../types#credentialfailureevent)).
+Called with `{ code, message }` when one of the methods above rejects, including `CONFIGURATION_ERROR` from the Google
+and hybrid methods (see [`CredentialFailureEvent`](../types#credentialfailureevent); `code` is typed as
+`CredentialErrorCode`). `oauthSignIn` never emits, so its `NETWORK_ERROR` and `CONFIGURATION_ERROR` only reject.
 
 These rejections are not emitted:
 
@@ -33,7 +34,9 @@ These rejections are not emitted:
 - iOS passkey `NOT_SUPPORTED_ERROR` (below iOS 16)
 - iOS passkey call without `requestJson`
 
-On Android, `getPassword` and `passwordSignIn` resolve `false` on errors, which emits nothing.
+On Android, `passwordSignIn` resolves `false` on errors (including the user declining), which emits nothing.
+`getPassword` resolves `CANCELLED` when the user dismisses it or there is no saved password (emitted as a success event)
+and rejects with `INVALID_RESULT_ERROR` on other errors (emitted as a failure event).
 
 ### `addAppleIdCredentialRevokedListener(listener)` (iOS only)
 

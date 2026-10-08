@@ -8,11 +8,12 @@
 - Full integration with iOS Keychain
 - Returns complete user information on first sign-in
 - Caches email and fullName **in memory** (until the app is killed) for subsequent sign-ins; store them on your backend
-- No additional configuration needed beyond library setup
+- Needs the Sign in with Apple capability (Expo: the [config plugin](../expo.md) `appleSignIn: true` option)
 - Check `APPLE_ID_SUPPORTED` constant before using
 
 ### Android
-- Uses Custom Tabs to open your provided URL (`options` is ignored, put the nonce/state in your URL)
+- Uses Custom Tabs to open your provided URL (`options` is ignored and logs a warning in development: put the
+  nonce/state in your URL)
 - Your backend must finish by redirecting to `<applicationId>://oauth/callback` (`OAUTH_REDIRECT_URI`)
 - Returns redirect URL components after OAuth completion
 - **Requires backend implementation** to handle OAuth flow
@@ -240,7 +241,8 @@ function extractAuthCode(query: string | null): string {
 
 1. **Enable Sign in with Apple:**
    - Add Sign in with Apple capability to your App ID in Apple Developer Portal
-   - Enable the capability in Xcode project settings
+   - Enable the capability in Xcode project settings (it adds `com.apple.developer.applesignin` = `["Default"]` to the
+     entitlements). With Expo, set `"appleSignIn": true` in the [config plugin](../expo.md) instead
    - The library handles all native implementation
 
 2. **Backend Token Verification** (Recommended):

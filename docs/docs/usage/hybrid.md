@@ -15,7 +15,7 @@ desired authentication flow.
 
 > ⚠️ **Important:**
 > - Users **cannot choose** the platform methods - the OS presents available credentials
-> - **Android:** Google ID must be configured (`googleClientId`). **iOS:** `googleClientId` is ignored, Google is not offered
+> - **Android:** Google ID must be configured (`webClientId`). **iOS:** the client id is ignored, Google is not offered
 > - Always handle the `CANCELLED` case - users may dismiss the credential picker
 
 We **highly recommend** using hybrid sign-in as the **default** for unauthenticated users, while still providing
@@ -27,30 +27,30 @@ alternative sign-in options to cover all cases.
 - Offers: Apple ID and saved passwords (`ASAuthorizationController`). **Google ID is not included**
 - On iOS 16+ only credentials already on the device are offered
 - Resolves `CANCELLED` when the user dismisses it or nothing is available
-- Only `options.nonce` is used (for Apple ID)
+- Only `options.nonce` is used (for Apple ID); the client id and other options log a warning in development
 - Ideal for app launch to restore previous session
 
 ### Android
 - Offers: Google ID (`GetGoogleIdOption`) and saved passwords. **Apple ID is not included** (use `appleSignIn()`)
 - Uses Credential Manager to aggregate the options in one bottom sheet
-- Requires Google Play Services: rejects with `NOT_SUPPORTED_ERROR` without them, even though `HYBRID_SUPPORTED` is
-  `true`
-- `authorizedAccounts`, `autoSelectEnabled` and `nonce` are used; `mode`, `scopes`, `offlineAccess` and `hostedDomain`
-  are ignored
+- Requires Google Play Services: rejects with `NOT_SUPPORTED_ERROR` without them (`HYBRID_SUPPORTED` is `false` then)
+- Uses `webClientId`; rejects with `CONFIGURATION_ERROR` without it
+- `authorizedAccounts`, `autoSelectEnabled` and `nonce` are used; `mode`, `hint`, `scopes`, `offlineAccess`,
+  `hostedDomain` and `serverClientId` are ignored (with a warning in development)
 
 ## Methods
 
-### `hybridSignIn(googleClientId: string, options?: GoogleSignInOptions)`
+### `hybridSignIn(clientId: GoogleClientId, options?: GoogleSignInOptions)`
 
 Performs all available sign-in methods on the platform at once.
 This is typically used on app startup to retrieve any existing sign-in credentials.
 
 #### Parameters
 
-| Name             | Type                             | Description                                                                                             |
-|------------------|----------------------------------|---------------------------------------------------------------------------------------------------------|
-| `googleClientId` | `string`                         | The web client ID for Google Sign-In. Used on Android only.                                             |
-| `options`        | `GoogleSignInOptions` (optional) | Optional configuration for Google Sign-In. See [GoogleSignInOptions](#googlesigninoptions) for details. |
+| Name       | Type                             | Description                                                                                             |
+|------------|----------------------------------|---------------------------------------------------------------------------------------------------------|
+| `clientId` | `GoogleClientId`                 | Same as `googleSignIn`: `{ iosClientId, webClientId }` or a string. Android uses `webClientId`; ignored on iOS. See [Google client ids](../methods#google-client-ids). |
+| `options`  | `GoogleSignInOptions` (optional) | Optional configuration for Google Sign-In. See [GoogleSignInOptions](#googlesigninoptions) for details. |
 
 #### GoogleSignInOptions
 
@@ -124,6 +124,7 @@ The promise resolves to whichever credential is available on the platform:
 
 | Error Code | Description | Platform |
 |------------|-------------|----------|
+| `CONFIGURATION_ERROR` | No `webClientId` | Android only |
 | `NOT_SUPPORTED_ERROR` | Google Play Services not available or outdated | Android only |
 | `NO_ACTIVITY_ERROR` | No Android activity context available | Android only |
 | `NO_SIGN_IN_AVAILABLE` | No Google account or saved password for the request | Android only |
@@ -132,9 +133,8 @@ The promise resolves to whichever credential is available on the platform:
 
 #### Important Notes
 
-- Always check the platform support constants before using hybrid sign-in:
-  - `HYBRID_SUPPORTED` - Always `true`
-  - `GOOGLE_PLAY_SERVICES_SUPPORTED` - Required on Android
+- Check `HYBRID_SUPPORTED` before using hybrid sign-in: always `true` on iOS, same as `GOOGLE_PLAY_SERVICES_SUPPORTED`
+  on Android
 - On iOS, Apple ID and stored passwords may be returned
 - On Android, Google ID and stored passwords may be returned (Apple requires separate Chrome Custom Tabs flow)
 - Useful for automatically signing in users if credentials are already available
@@ -151,6 +151,11 @@ import {
   CredentialsType,
 } from 'react-native-oauth-essentials';
 
+const GOOGLE_CLIENT_IDS = {
+  iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+  webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+};
+
 async function initAuth(): Promise<void> {
   if (!HYBRID_SUPPORTED) {
     console.log('Hybrid sign-in is not supported on this platform.');
@@ -159,7 +164,7 @@ async function initAuth(): Promise<void> {
   }
 
   try {
-    const credential = await hybridSignIn('YOUR_GOOGLE_WEB_CLIENT_ID', {
+    const credential = await hybridSignIn(GOOGLE_CLIENT_IDS, {
       authorizedAccounts: true,  // Android only
       autoSelectEnabled: false,  // Android only
     });
@@ -201,7 +206,7 @@ Perfect for restoring user session when app starts:
 ```typescript
 async function handleAppLaunch() {
   try {
-    const credential = await hybridSignIn('YOUR_GOOGLE_WEB_CLIENT_ID');
+    const credential = await hybridSignIn(GOOGLE_CLIENT_IDS);
 
     if (credential.type !== CredentialsType.CANCELLED) {
       // User has existing credentials, auto sign-in
@@ -226,7 +231,7 @@ Show a single button that tries all methods:
 ```typescript
 async function handleContinueButton() {
   try {
-    const credential = await hybridSignIn('YOUR_GOOGLE_WEB_CLIENT_ID');
+    const credential = await hybridSignIn(GOOGLE_CLIENT_IDS);
 
     if (credential.type === CredentialsType.CANCELLED) {
       // User dismissed, show other sign-in options
@@ -267,7 +272,7 @@ async function initializeApp() {
 
   try {
     // Try hybrid sign-in silently in background
-    const credential = await hybridSignIn('YOUR_GOOGLE_WEB_CLIENT_ID', {
+    const credential = await hybridSignIn(GOOGLE_CLIENT_IDS, {
       autoSelectEnabled: true,  // Auto-select if only one credential (Android)
     });
 

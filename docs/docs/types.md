@@ -9,6 +9,34 @@ strong typing for authentication credentials and configuration options.
 
 ## Configuration Types
 
+### `GoogleClientIds`
+
+Google OAuth client ids per platform, all from the same Google Cloud project. Taken by `googleSignIn`,
+`googleSilentSignIn` and `hybridSignIn`.
+
+- `iosClientId` (string, optional) - iOS client id (created with the bundle id). Used on iOS only. When missing, iOS
+  reads the `GIDClientID` key of Info.plist
+- `webClientId` (string, optional) - Web client id. **Android:** the client id passed to Credential Manager (required,
+  missing rejects with `CONFIGURATION_ERROR`). **iOS:** the default `serverClientId` (idToken audience and
+  `serverAuthCode`); when neither is set, iOS reads `GIDServerClientID` from Info.plist
+
+### `GoogleClientId`
+
+```ts
+type GoogleClientId = string | GoogleClientIds;
+```
+
+A `GoogleClientIds` object, or a single client id string used as is on both platforms (it must be the iOS client id on
+iOS and the web client id on Android).
+
+```ts
+const GOOGLE_CLIENT_IDS: GoogleClientIds = {
+  iosClientId: '1234-abcd.apps.googleusercontent.com',
+  webClientId: '5678-efgh.apps.googleusercontent.com',
+};
+await googleSignIn(GOOGLE_CLIENT_IDS);
+```
+
 ### `GoogleSignInOptions`
 
 Configuration options for customizing the Google sign-in behavior.
@@ -26,10 +54,11 @@ Configuration options for customizing the Google sign-in behavior.
 - `hint` (string, optional) - **iOS only.** Email or account id to preselect
 - `hostedDomain` (string, optional) - Restricts sign in to a Google Workspace domain
 - `scopes` (string[], optional) - Additional OAuth scopes; `accessToken` and `grantedScopes` are returned
-- `offlineAccess` (boolean, optional) - Returns a `serverAuthCode` your backend can exchange for a refresh token. On iOS
-  it requires `serverClientId`
-- `serverClientId` (string, optional) - **iOS only.** Web (server) client id, used as the `idToken` audience and for
-  `serverAuthCode`. On Android the client id passed to `googleSignIn` already is the server client id
+- `offlineAccess` (boolean, optional) - **Android only.** Returns a `serverAuthCode` your backend can exchange for a
+  refresh token. On iOS it has no effect: `serverAuthCode` is returned whenever `serverClientId` is set
+- `serverClientId` (string, optional) - **iOS:** web (server) client id, used as the `idToken` audience and for
+  `serverAuthCode`; defaults to `webClientId`. **Android:** client id the `serverAuthCode` is issued for (defaults to
+  `webClientId`)
 
 **Example:**
 
@@ -102,7 +131,8 @@ These types represent the authentication results returned by different sign-in m
 
 ### `PasswordCredentialResult`
 
-Represents the result of password-based authentication.
+Represents the result of password-based authentication. `getPassword()` returns
+`Promise<PasswordCredentialResult | CancelledCredentialResult>` (it never resolves `false`, since 1.1).
 
 **Properties:**
 
@@ -314,7 +344,7 @@ Received by [`addCredentialSuccessListener`](./usage/events.md). Same shape as t
 
 Received by [`addCredentialFailureListener`](./usage/events.md).
 
-- `code` (string) - A `CredentialError` value
+- `code` ([`CredentialErrorCode`](#credentialerrorcode)) - A `CredentialError` value
 - `message` (string) - Native error message
 
 ## Enumerations
@@ -380,8 +410,8 @@ Enum defining possible error codes that may be thrown during authentication oper
 
 **Values:**
 
-- `NO_PLAY_SERVICES_ERROR` - Not thrown by the native modules (kept for compatibility). Missing Google Play Services
-  rejects with `NOT_SUPPORTED_ERROR`
+- `NO_PLAY_SERVICES_ERROR` - **Deprecated** (`@deprecated`), never thrown. Missing Google Play Services rejects with
+  `NOT_SUPPORTED_ERROR`
 - `NO_ACTIVITY_ERROR` - No activity (Android) or view controller (iOS) is available to present the authentication flow
 - `INVALID_RESULT_ERROR` - The authentication result received from the provider is invalid or malformed (Both platforms)
 - `NO_SIGN_IN_AVAILABLE` - There is no credential to use: no previous sign in for `googleSilentSignIn`, no account or
@@ -392,30 +422,75 @@ Enum defining possible error codes that may be thrown during authentication oper
   outdated (Android), passkeys below iOS 16 / Android 9, `getAppleIdCredentialState` on Android
 - `BROWSER_UNAVAILABLE` - The browser session could not be opened: the app is not active, Guided Access is on, the
   system refused to start `ASWebAuthenticationSession` ("Unable to open Safari."), or there is no browser on Android
+- `CONFIGURATION_ERROR` - The app is misconfigured: no Google client id (iOS: no `iosClientId` nor `GIDClientID`;
+  Android: no `webClientId`), the reversed iOS client id is not in `CFBundleURLTypes` > `CFBundleURLSchemes` (the
+  `message` has the exact scheme to add), or `oauthSignIn` got a `redirectUri` without scheme
+- `NETWORK_ERROR` - `oauthSignIn`: the token endpoint request failed (offline, DNS, TLS...)
 
 **Usage:**
 
 ```ts
-import { googleSignIn, CredentialError } from 'react-native-oauth-essentials';
+import { googleSignIn, isCredentialError, CredentialError } from 'react-native-oauth-essentials';
 
 try {
-  const credential = await googleSignIn('YOUR_WEB_CLIENT_ID');
+  const credential = await googleSignIn({ iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID });
 } catch (error) {
-  if (error.code === CredentialError.NOT_SUPPORTED_ERROR) {
+  if (isCredentialError(error, CredentialError.CONFIGURATION_ERROR)) {
+    console.error(error.message); // e.g. the iOS URL scheme to add
+  } else if (isCredentialError(error, CredentialError.NOT_SUPPORTED_ERROR)) {
     console.error('Please install or update Google Play Services');
-  } else if (error.code === CredentialError.NO_ACTIVITY_ERROR) {
-    console.error('Activity context not available');
-  } else if (error.code === CredentialError.INVALID_RESULT_ERROR) {
-    console.error('Invalid authentication result');
+  } else if (isCredentialError(error)) {
+    console.error(error.code, error.message);
   } else {
-    console.error('Unknown error:', error);
+    throw error;
   }
 }
 ```
 
+### `CredentialErrorCode`
+
+```ts
+type CredentialErrorCode = `${CredentialError}`;
+```
+
+String union of the `CredentialError` values (`'CONFIGURATION_ERROR' | 'NETWORK_ERROR' | ...`). Accepts both the enum
+members and their strings.
+
+### `OauthEssentialsError`
+
+```ts
+type OauthEssentialsError<C extends CredentialErrorCode = CredentialErrorCode> = Error & { code: C };
+```
+
+What every promise of the library rejects with. Narrow an unknown error to it with `isCredentialError`.
+
 ## Type Guards
 
-You can use TypeScript type guards for better type safety:
+### `isCredentialError(error, code?)`
+
+```ts
+function isCredentialError<C extends CredentialErrorCode = CredentialErrorCode>(
+  error: unknown,
+  code?: C
+): error is OauthEssentialsError<C>;
+```
+
+Returns `true` when `error` is an object whose `code` is a `CredentialError` value, and equals `code` when given. Use it
+in `catch` blocks instead of reading `error.code` on `unknown`:
+
+```ts
+try {
+  await googleSignIn(GOOGLE_CLIENT_IDS);
+} catch (e) {
+  if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) console.error(e.message);
+  else if (isCredentialError(e)) report(e.code);
+  else throw e;
+}
+```
+
+### Result type guards
+
+You can write your own type guards for results:
 
 ```ts
 import { CredentialsType, type GoogleIdCredentialResult } from 'react-native-oauth-essentials';
@@ -425,7 +500,7 @@ function isGoogleCredential(credential: any): credential is GoogleIdCredentialRe
 }
 
 // Usage
-const credential = await googleSignIn('...');
+const credential = await googleSignIn(GOOGLE_CLIENT_IDS);
 if (isGoogleCredential(credential)) {
   // TypeScript knows credential is GoogleIdCredentialResult
   console.log(credential.data.idToken);

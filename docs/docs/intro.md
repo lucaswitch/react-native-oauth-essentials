@@ -5,8 +5,8 @@ sidebar_position: 1
 # About
 
 **React Native OAuth Essentials** is an essential OAuth solution for React Native apps. It provides **up-to-date Google
-Sign-In, Apple Sign-In, and Password Sign-In**, delivering a **native sign-in experience** with a simple, promise-based
-API. It's a must-have for every React Native app.
+Sign-In, Apple Sign-In, saved passwords, passkeys and generic OAuth 2.0 / OpenID Connect**, delivering a **native
+sign-in experience** with a simple, promise-based API. It's a must-have for every React Native app.
 
 **Platform Support:** iOS and Android only. This library does not support React Native Web or other platforms.
 
@@ -14,7 +14,11 @@ API. It's a must-have for every React Native app.
 
 [Installation](./installation.md)
 
+[Expo config plugin](./expo.md) (development builds; Expo Go is not supported)
+
 [Setup with AI agents](./ai-setup.md)
+
+[Testing with Jest](./testing.md) (mock at `react-native-oauth-essentials/jest`)
 
 [Usage](./usage/hybrid.md)
 

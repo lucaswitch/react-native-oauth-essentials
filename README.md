@@ -25,7 +25,7 @@ Please jump to our docs website
 
 Using a coding agent? Paste the [setup prompt for AI agents](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) to install and configure everything.
 
-Requires the **New Architecture**. Not supported in Expo Go (use a development build).
+Requires the **New Architecture**. Not supported in Expo Go: use a development build and the [Expo config plugin](#expo).
 
 ## Features
 
@@ -77,6 +77,8 @@ import {
   HYBRID_SUPPORTED,
   PASSKEYS_SUPPORTED,
   OAUTH_REDIRECT_URI,
+  // Errors
+  isCredentialError,
   // Enums
   CredentialsType,
   CredentialError,
@@ -87,8 +89,11 @@ import {
 ### Conventions
 
 - Dismissing the UI **resolves** `{ type: CredentialsType.CANCELLED, data: null }` instead of rejecting.
-- Errors reject with `error.code` from `CredentialError`.
+- Errors reject with `error.code` from `CredentialError` (every rejection has a `code`). Narrow them with
+  `isCredentialError`.
 - iOS rejects a second call of the same flow while the first is pending with `SIMULTANEOUS_CALL_ERROR`.
+- In development, options that have no effect on the current platform log a `console.warn` once
+  (`[react-native-oauth-essentials] googleSignIn: "hint" is ignored on Android.`).
 
 ### Constants
 
@@ -96,9 +101,9 @@ import {
 |---|---|---|
 | `GOOGLE_PLAY_SERVICES_SUPPORTED` | `false` | Play Services installed and up to date |
 | `GOOGLE_ID_SUPPORTED` | `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
-| `PASSWORD_SUPPORTED` | `true` | `true` (the methods still need Play Services) |
+| `PASSWORD_SUPPORTED` | `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
 | `APPLE_ID_SUPPORTED` | `true` | `true` (web flow) |
-| `HYBRID_SUPPORTED` | `true` | `true` (the method still needs Play Services) |
+| `HYBRID_SUPPORTED` | `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
 | `PASSKEYS_SUPPORTED` | iOS 16+ | Android 9+ |
 | `OAUTH_REDIRECT_URI` | `<bundle id, lowercased>://oauth/callback` | `<applicationId>://oauth/callback` |
 
@@ -106,14 +111,21 @@ import {
 
 #### `googleSignIn(clientId, options?)`
 
-Shows the Google sign in UI. Pass the **iOS client id on iOS** and the **web client id on Android**. iOS also needs the
-reversed iOS client id as a URL scheme in `Info.plist`.
+Shows the Google sign in UI. `clientId` is `{ iosClientId?, webClientId? }` (all from the same Google Cloud project):
+
+- iOS uses `iosClientId` (or `GIDClientID` from Info.plist) and `webClientId` as the default `serverClientId` (idToken
+  audience and `serverAuthCode`; falls back to `GIDServerClientID`). iOS also needs the reversed iOS client id as a URL
+  scheme in `Info.plist` (`1234-abcd.apps.googleusercontent.com` becomes `com.googleusercontent.apps.1234-abcd`):
+  without it the call rejects with `CONFIGURATION_ERROR`, whose message has the exact scheme to add.
+- Android uses `webClientId` (missing rejects with `CONFIGURATION_ERROR`). The Android client id is never passed.
+- A string still works and is used as is: the iOS client id on iOS, the web client id on Android.
 
 ```typescript
-const result = await googleSignIn(Platform.select({ ios: IOS_CLIENT_ID, default: WEB_CLIENT_ID })!, {
-  mode: 'button',                // Android: full "Sign in with Google" flow (use it for button taps)
-  serverClientId: WEB_CLIENT_ID, // iOS: idToken audience and serverAuthCode
-  nonce,                         // embedded in the idToken
+const GOOGLE_CLIENT_IDS = { iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID };
+
+const result = await googleSignIn(GOOGLE_CLIENT_IDS, {
+  mode: 'button', // Android: full "Sign in with Google" flow (use it for button taps)
+  nonce,          // embedded in the idToken
   scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
 });
 
@@ -131,9 +143,9 @@ with `NO_SIGN_IN_AVAILABLE` when there is nothing to restore.
 
 ```typescript
 try {
-  const result = await googleSilentSignIn(GOOGLE_CLIENT_ID);
+  const result = await googleSilentSignIn(GOOGLE_CLIENT_IDS);
 } catch (e) {
-  if (e.code === CredentialError.NO_SIGN_IN_AVAILABLE) showSignInScreen();
+  if (isCredentialError(e, CredentialError.NO_SIGN_IN_AVAILABLE)) showSignInScreen();
 }
 ```
 
@@ -178,15 +190,19 @@ Rejects with `NOT_SUPPORTED_ERROR` on Android.
 
 #### `getPassword()`
 
-Shows the passwords saved for the app. **Returns:** `Promise<false | PasswordCredentialResult>`. When there is no
-password or the user dismisses it, iOS resolves the `CANCELLED` result and Android resolves `false`.
+Shows the passwords saved for the app. **Returns:** `Promise<PasswordCredentialResult | CancelledCredentialResult>`.
+When there is no password or the user dismisses it, both platforms resolve the `CANCELLED` result. Other Android errors
+reject with `INVALID_RESULT_ERROR`.
 
 ```typescript
 const result = await getPassword();
-if (result && result.type === CredentialsType.PASSWORD) {
+if (result.type === CredentialsType.PASSWORD) {
   await api.signIn(result.data.username, result.data.password);
 }
 ```
+
+> **Migrating to 1.1:** `getPassword()` no longer resolves `false` on Android. Replace `if (!result)` /
+> `result === false` checks with `result.type === CredentialsType.CANCELLED`.
 
 #### `passwordSignIn(username, password)`
 
@@ -195,13 +211,13 @@ when saved. iOS resolves `false` without doing anything: use `textContentType` o
 
 ### Hybrid
 
-#### `hybridSignIn(googleClientId, options?)`
+#### `hybridSignIn(clientId, options?)`
 
 One picker with the credentials the user already has, meant for app start. iOS offers Apple ID + saved passwords (the
-Google client id is ignored); Android offers Google + saved passwords.
+Google client id is ignored); Android offers Google + saved passwords (uses `webClientId`).
 
 ```typescript
-const result = await hybridSignIn(WEB_CLIENT_ID, { authorizedAccounts: true });
+const result = await hybridSignIn(GOOGLE_CLIENT_IDS, { authorizedAccounts: true });
 if (result.type === CredentialsType.CANCELLED) showSignInScreen();
 ```
 
@@ -210,7 +226,7 @@ if (result.type === CredentialsType.CANCELLED) showSignInScreen();
 ### Passkeys
 
 Your server generates the WebAuthn options and verifies the responses. Needs `webcredentials:` Associated Domains on iOS
-and `assetlinks.json` on Android.
+(Expo plugin `webCredentialsDomains`) and `assetlinks.json` with the `get_login_creds` relation on Android.
 
 #### `createPassKey({ requestJson })`
 
@@ -270,6 +286,8 @@ Success and failure fire for `googleSignIn`, `googleSilentSignIn`, `getPassword`
 ### Options
 
 ```typescript
+type GoogleClientId = string | { iosClientId?: string; webClientId?: string };
+
 type GoogleSignInOptions = {
   mode?: 'bottomSheet' | 'button'; // Android
   authorizedAccounts?: boolean;    // Android: only accounts that signed in before
@@ -279,7 +297,7 @@ type GoogleSignInOptions = {
   hostedDomain?: string;           // Google Workspace domain
   scopes?: string[];
   offlineAccess?: boolean;         // Android: returns serverAuthCode
-  serverClientId?: string;         // iOS: idToken audience + serverAuthCode. Android: serverAuthCode client id
+  serverClientId?: string;         // iOS: idToken audience + serverAuthCode (default webClientId). Android: serverAuthCode client id
 };
 
 type AppleSignInOptions = { nonce?: string; state?: string }; // iOS
@@ -369,22 +387,65 @@ type CancelledCredentialResult = { type: CredentialsType.CANCELLED; data: null }
 
 | `CredentialError` | When |
 |---|---|
+| `CONFIGURATION_ERROR` | Setup bug: no Google client id, iOS URL scheme missing from Info.plist (`message` has the exact scheme), invalid `redirectUri` |
 | `NOT_SUPPORTED_ERROR` | No Play Services (Android), passkeys on old OS, `getAppleIdCredentialState` on Android |
 | `NO_ACTIVITY_ERROR` | No activity / view controller to present the UI |
 | `NO_SIGN_IN_AVAILABLE` | Nothing to return: no previous sign in, account or passkey |
 | `BROWSER_UNAVAILABLE` | Browser session could not open (iOS: app not active, Guided Access; Android: no browser) |
 | `SIMULTANEOUS_CALL_ERROR` | iOS: the same flow is still pending |
+| `NETWORK_ERROR` | `oauthSignIn`: the token request failed |
 | `INVALID_RESULT_ERROR` | The provider failed or returned an unexpected result (`message` has the details) |
 | `NO_PLAY_SERVICES_ERROR` | Deprecated, never thrown |
 
+`isCredentialError(error, code?)` narrows an unknown error to `OauthEssentialsError` (`Error & { code }`):
+
 ```typescript
 try {
-  await googleSignIn(GOOGLE_CLIENT_ID);
+  await googleSignIn(GOOGLE_CLIENT_IDS);
 } catch (e) {
-  if (e.code === CredentialError.BROWSER_UNAVAILABLE) showRetryMessage();
-  else if (e.code === CredentialError.NOT_SUPPORTED_ERROR) showUpdatePlayServicesMessage();
+  if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) console.error(e.message);
+  else if (isCredentialError(e, CredentialError.BROWSER_UNAVAILABLE)) showRetryMessage();
+  else if (isCredentialError(e)) report(e.code);
+  else throw e;
 }
 ```
+
+## Expo
+
+Not supported in Expo Go; use a development build (`npx expo prebuild` / `npx expo run:ios`). The config plugin writes
+the iOS native config (Android needs nothing):
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["react-native-oauth-essentials", {
+        "google": { "iosClientId": "1234-abcd.apps.googleusercontent.com", "webClientId": "5678-efgh.apps.googleusercontent.com" },
+        "appleSignIn": true,
+        "webCredentialsDomains": ["example.com"]
+      }]
+    ]
+  }
+}
+```
+
+- `google`: adds the reversed iOS client id URL scheme and `GIDClientID` / `GIDServerClientID` to Info.plist.
+- `appleSignIn`: adds the Sign in with Apple entitlement.
+- `webCredentialsDomains`: adds `webcredentials:` associated domains (passkeys and saved passwords).
+
+[Expo docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/expo)
+
+## Testing (Jest)
+
+Importing the library in Jest fails with a `TurboModuleRegistry.getEnforcing` error unless you use the bundled mock:
+
+```js
+// jest.setup.js (referenced by "setupFiles" in the Jest config)
+jest.mock('react-native-oauth-essentials', () => require('react-native-oauth-essentials/jest'));
+```
+
+Every method is a `jest.fn()` resolving a plausible result; override it per test with `mockResolvedValueOnce` /
+`mockRejectedValueOnce`. [Testing docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/testing)
 
 ## Short history
 

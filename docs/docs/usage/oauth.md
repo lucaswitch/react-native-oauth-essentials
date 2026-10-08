@@ -41,8 +41,10 @@ your own server...) using the authorization code flow with PKCE, in a secure bro
 redirect parameter in `params` and, with `tokenEndpoint`, the token response in `tokens`.
 
 The `state` is generated and verified by the library. A provider `access_denied` error resolves as `CANCELLED`; other
-provider errors reject with `INVALID_RESULT_ERROR`. When the browser cannot be opened it rejects with
-`BROWSER_UNAVAILABLE`.
+provider errors, and a non JSON token response, reject with `INVALID_RESULT_ERROR`. When the browser cannot be opened it
+rejects with `BROWSER_UNAVAILABLE`, when the token request fails (offline, DNS, TLS...) with `NETWORK_ERROR`, and when
+`redirectUri` has no scheme with `CONFIGURATION_ERROR`. Every rejection has a `code`: narrow it with
+`isCredentialError`. `oauthSignIn` does not emit events.
 
 #### Example: exchange the code on your backend (recommended)
 
