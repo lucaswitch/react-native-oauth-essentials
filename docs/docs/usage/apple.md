@@ -3,19 +3,17 @@
 ## Platform Support
 
 ### iOS
-- **Minimum:** iOS 13+
 - Uses native `AuthenticationServices` framework
 - Presents native Apple Sign-In UI sheet
 - Full integration with iOS Keychain
 - Returns complete user information on first sign-in
-- Caches email and fullName for subsequent sign-ins
+- Caches email and fullName **in memory** (until the app is killed) for subsequent sign-ins; store them on your backend
 - No additional configuration needed beyond library setup
 - Check `APPLE_ID_SUPPORTED` constant before using
 
 ### Android
-- **Minimum:** Android 8.0+ (API 26+)
-- Uses Chrome Custom Tabs to open OAuth flow
-- Opens your provided URL parameter in the device's default browser
+- Uses Custom Tabs to open your provided URL (`options` is ignored, put the nonce/state in your URL)
+- Your backend must finish by redirecting to `<applicationId>://oauth/callback` (`OAUTH_REDIRECT_URI`)
 - Returns redirect URL components after OAuth completion
 - **Requires backend implementation** to handle OAuth flow
 - You must implement Apple Sign-In REST API on your server

@@ -3,20 +3,18 @@
 ## Platform Support
 
 ### iOS
-- **Minimum:** iOS 13+
-- Uses native iOS Google Sign-In SDK
-- Presents native iOS authentication UI
+- Uses the GoogleSignIn SDK, which opens the Google page in an `ASWebAuthenticationSession`
+- Presented from the top most view controller; waits up to 2 seconds for the app to become active
 - No Google Play Services dependency
-- Supports One Tap sign-in experience
-- Check `GOOGLE_ID_SUPPORTED` constant before using
+- `GOOGLE_ID_SUPPORTED` is always `true`
 
 ### Android
-- **Minimum:** Android 8.0+ (API 26+)
-- Uses Credential Manager API with Google ID provider
-- **Requires Google Play Services** to be installed and up-to-date
-- Check both `GOOGLE_ID_SUPPORTED` and `GOOGLE_PLAY_SERVICES_SUPPORTED` before using
-- Presents native Android credential picker UI
-- Supports additional options: `authorizedAccounts` and `autoSelectEnabled`
+- **Minimum:** Android 7.0 (API 24, the library `minSdk`)
+- Uses Credential Manager (`GetGoogleIdOption` bottom sheet or `GetSignInWithGoogleOption` button flow) and, for
+  `scopes`/`offlineAccess`, the Authorization API
+- **Requires Google Play Services**: without them it rejects with `NOT_SUPPORTED_ERROR`. `GOOGLE_ID_SUPPORTED` equals
+  `GOOGLE_PLAY_SERVICES_SUPPORTED`
+- Supports additional options: `mode`, `authorizedAccounts` and `autoSelectEnabled`
 
 ## Methods
 
@@ -38,17 +36,21 @@ type GoogleSignInOptions = {
   authorizedAccounts?: boolean;          // Android only: Filter to authorized accounts
   autoSelectEnabled?: boolean;           // Android only: Enable auto-selection
   mode?: 'bottomSheet' | 'button';       // Android only: UI flow (default 'bottomSheet')
-  nonce?: string;                        // Embedded in the idToken (replay protection)
+  nonce?: string;                        // Embedded as-is in the idToken (replay protection)
   hint?: string;                         // iOS only: Email to preselect
-  hostedDomain?: string;                 // Restrict to a Google Workspace domain
-  scopes?: string[];                     // Extra OAuth scopes (returns accessToken)
-  offlineAccess?: boolean;               // Returns serverAuthCode for your backend
-  serverClientId?: string;               // iOS: web client id (audience / serverAuthCode)
+  hostedDomain?: string;                 // Workspace domain (Android: button flow and authorization only)
+  scopes?: string[];                     // Extra OAuth scopes
+  offlineAccess?: boolean;               // Android only: returns serverAuthCode
+  serverClientId?: string;               // iOS: idToken audience + serverAuthCode. Android: serverAuthCode client id
 };
 ```
 
 - `mode: 'button'` should be used when the user taps a "Sign in with Google" button. `bottomSheet` falls back to it automatically when no credential is available, unless `authorizedAccounts` is set.
 - `scopes` and `offlineAccess` trigger an extra consent step on Android (Authorization API). Declining it resolves `CANCELLED`.
+- On iOS `scopes` are requested during sign in, and `accessToken`/`grantedScopes` are always returned. `serverAuthCode`
+  is returned whenever `serverClientId` is set (`offlineAccess` has no effect).
+
+See [Methods](../methods#googlesigninwebclientid-options) for the exact per-platform behavior.
 
 #### Returns
 
@@ -61,17 +63,17 @@ The promise resolves to:
 {
   type: CredentialsType.GOOGLE_ID;
   data: {
-    id: string;                      // User's Google ID
+    id: string;                      // iOS: Google user id (sub). Android: account email
     idToken: string;                 // JWT ID token for backend verification
     displayName: string;             // Full name
     givenName: string;               // First name
     familyName: string;              // Last name
     email?: string;                  // Email
     profilePictureUri?: string | null;  // Profile picture URL
-    phoneNumber?: string | null;     // Phone number (if available)
-    accessToken?: string | null;     // When `scopes` is set
-    serverAuthCode?: string | null;  // When `offlineAccess` is set
-    grantedScopes?: string[] | null; // Scopes the user granted
+    phoneNumber?: string | null;     // Android only
+    accessToken?: string | null;     // iOS: always. Android: when `scopes`/`offlineAccess` is set
+    serverAuthCode?: string | null;  // iOS: when `serverClientId` is set. Android: when `offlineAccess` is set
+    grantedScopes?: string[] | null; // Same as accessToken
   };
 }
 ```
@@ -90,20 +92,20 @@ The method may throw errors with the following codes:
 
 | Error Code | Description | Platform |
 |------------|-------------|----------|
-| `NO_PLAY_SERVICES_ERROR` | Google Play Services not available or outdated | Android only |
+| `NOT_SUPPORTED_ERROR` | Google Play Services not available or outdated | Android only |
 | `NO_ACTIVITY_ERROR` | No activity / view controller to present from | Both |
 | `NO_SIGN_IN_AVAILABLE` | No Google account available for the requested filter (iOS: `googleSilentSignIn` only) | Both |
-| `BROWSER_UNAVAILABLE` | The sign-in sheet could not be opened (app in background, Guided Access, Safari restricted) | iOS only |
-| `SIMULTANEOUS_CALL_ERROR` | Another Google sign-in is still in progress | Both |
-| `INVALID_RESULT_ERROR` | Invalid result from authentication provider | Both |
+| `BROWSER_UNAVAILABLE` | The sign-in page could not be opened (app not active within 2 s, Guided Access, Safari restricted) | iOS only |
+| `SIMULTANEOUS_CALL_ERROR` | `googleSignIn`/`googleSilentSignIn` is still pending | iOS only |
+| `INVALID_RESULT_ERROR` | The provider failed or returned an unexpected result | Both |
 
 #### Important Notes
 
-- Always check `GOOGLE_ID_SUPPORTED` before calling this method
-- On Android, also check `GOOGLE_PLAY_SERVICES_SUPPORTED` to ensure Google Play Services are available
+- Check `GOOGLE_ID_SUPPORTED` before calling this method (on Android it is `false` without Play Services)
 - The `idToken` should be sent to your backend for verification
-- Options `authorizedAccounts` and `autoSelectEnabled` only work on Android
+- Options `mode`, `authorizedAccounts` and `autoSelectEnabled` only work on Android
 - User can cancel the flow, resulting in `CancelledCredentialResult`
+- Use `idToken`'s `sub` claim (verified on your backend) as the user id: `data.id` differs between platforms
 
 #### Example Usage (TypeScript)
 
@@ -111,21 +113,14 @@ The method may throw errors with the following codes:
 import {
   googleSignIn,
   GOOGLE_ID_SUPPORTED,
-  GOOGLE_PLAY_SERVICES_SUPPORTED,
   CredentialsType,
   CredentialError,
 } from 'react-native-oauth-essentials';
 
 async function signInWithGoogle(): Promise<void> {
-  // Check platform support
+  // Android: false without Google Play Services
   if (!GOOGLE_ID_SUPPORTED) {
-    console.log('Google sign-in is not supported on this platform.');
-    return;
-  }
-
-  // Android: Also check for Google Play Services
-  if (Platform.OS === 'android' && !GOOGLE_PLAY_SERVICES_SUPPORTED) {
-    console.log('Google Play Services not available.');
+    console.log('Google sign-in is not available on this device.');
     return;
   }
 
@@ -148,8 +143,10 @@ async function signInWithGoogle(): Promise<void> {
       console.log('User cancelled Google sign-in');
     }
   } catch (error) {
-    if (error.code === CredentialError.NO_PLAY_SERVICES_ERROR) {
+    if (error.code === CredentialError.NOT_SUPPORTED_ERROR) {
       console.error('Please install or update Google Play Services');
+    } else if (error.code === CredentialError.BROWSER_UNAVAILABLE) {
+      console.error('Could not open the Google page, try again');
     } else if (error.code === CredentialError.NO_ACTIVITY_ERROR) {
       console.error('Activity context not available');
     } else {
@@ -161,7 +158,14 @@ async function signInWithGoogle(): Promise<void> {
 
 ### `googleSilentSignIn(webClientId: string, options?: GoogleSignInOptions)`
 
-Restores a previous Google session without showing any UI. Resolves `GoogleIdCredentialResult`, or `CANCELLED` when there is nothing to restore. Rejects with `NO_SIGN_IN_AVAILABLE` when no previous sign-in exists.
+Restores a previous Google sign in. Resolves `GoogleIdCredentialResult` and rejects with `NO_SIGN_IN_AVAILABLE` when
+there is nothing to restore.
+
+- **iOS:** `restorePreviousSignIn`, never shows UI and refreshes the tokens. `hint`, `scopes`, `nonce` and
+  `offlineAccess` are ignored and `serverAuthCode` is `null`.
+- **Android:** bottom sheet filtered to accounts that already signed in to the app, with auto select on: no UI when
+  there is a single one, otherwise the sheet is shown (dismissing it resolves `CANCELLED`). Authorization for
+  `scopes`/`offlineAccess` is only requested without UI; when consent would be needed `accessToken` is `null`.
 
 ```ts
 const credential = await googleSilentSignIn('YOUR_GOOGLE_WEB_CLIENT_ID');
@@ -169,7 +173,8 @@ const credential = await googleSilentSignIn('YOUR_GOOGLE_WEB_CLIENT_ID');
 
 ### `signOut()`
 
-Clears the Google session on iOS and the Credential Manager state on Android, so the next `googleSignIn` does not auto-select the previous account.
+Clears the Google session on iOS (so `googleSilentSignIn` rejects afterwards) and the Credential Manager state on
+Android (turns off auto select until the user picks an account again). Resolves `true`, does not emit events.
 
 ```ts
 await signOut();

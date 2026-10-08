@@ -300,7 +300,7 @@ Just make sure:
 - Make sure there are no typos or extra spaces
 - Rebuild your iOS app after making changes
 
-### Android: "NO_PLAY_SERVICES_ERROR"
+### Android: "NOT_SUPPORTED_ERROR"
 - Install Google Play Services on your device/emulator
 - Update Google Play Services to the latest version
 - Use a device with Google Play Store (not AOSP builds)

@@ -33,12 +33,26 @@ const APPLE_ID_CACHED_RESULTS = new Map<
 >();
 
 /**
- * Performs the google sign in.
- * @param webClientId
- * @param options
+ * Shows the Google sign in UI and resolves with the signed in account.
  *
- * You should rely on GOOGLE_ID_SUPPORTED constant to check if you can use this method.
- * [Available on Android and IOS].
+ * iOS: configures GoogleSignIn with `webClientId` (+ `serverClientId`, `hostedDomain`) and presents
+ * it from the top most view controller, passing `hint`, `scopes` and `nonce`. If the app is not
+ * active it waits up to 2 seconds for it to become active.
+ * Android: shows the Credential Manager bottom sheet (`mode: 'bottomSheet'`, falls back to the
+ * "Sign in with Google" flow when there is no credential and `authorizedAccounts` is not set) or
+ * the "Sign in with Google" flow (`mode: 'button'`). When `scopes` or `offlineAccess` are set it
+ * then asks for authorization, which may show a consent screen.
+ *
+ * Resolves `GOOGLE_ID`, or `CANCELLED` when the user dismisses the UI (or declines the consent
+ * screen on Android).
+ * Rejects with `NOT_SUPPORTED_ERROR` (Android, no Play Services), `NO_ACTIVITY_ERROR`,
+ * `NO_SIGN_IN_AVAILABLE` (Android), `BROWSER_UNAVAILABLE` (iOS: app not active, Guided Access or
+ * Safari could not be opened), `SIMULTANEOUS_CALL_ERROR` (iOS: a Google sign in is pending) or
+ * `INVALID_RESULT_ERROR`.
+ * Emits `onCredentialSuccess` / `onCredentialFailure`.
+ *
+ * @param webClientId - Web client id on Android; the OAuth client id used by GoogleSignIn on iOS.
+ * @param options - See {@link GoogleSignInOptions}.
  */
 export async function googleSignIn(
   webClientId: string,
@@ -51,14 +65,19 @@ export async function googleSignIn(
 }
 
 /**
- * Restores a previous google sign in.
- * On iOS it never shows UI. On Android it only lists accounts that already signed in to the app
- * and auto selects when there is a single one.
- * Rejects with NO_SIGN_IN_AVAILABLE when there is nothing to restore.
- * @param webClientId
- * @param options
+ * Restores a previous Google sign in.
  *
- * [Available on Android and IOS].
+ * iOS: calls GoogleSignIn `restorePreviousSignIn`, which never shows UI and refreshes the tokens.
+ * `hint`, `scopes`, `nonce` and `offlineAccess` are ignored and `serverAuthCode` is always null.
+ * Android: shows the Credential Manager bottom sheet filtered to accounts that already signed in to
+ * the app with auto select on, so it signs in without UI when there is a single one. `mode` is
+ * ignored. When `scopes`/`offlineAccess` are set, authorization is only requested without UI:
+ * if consent is needed the result has `accessToken: null`.
+ *
+ * Resolves `GOOGLE_ID`, or `CANCELLED` when the user dismisses the Android sheet.
+ * Rejects with `NO_SIGN_IN_AVAILABLE` when there is nothing to restore, plus the same errors as
+ * {@link googleSignIn} (it shares the iOS simultaneous call lock with it).
+ * Emits `onCredentialSuccess` / `onCredentialFailure`.
  */
 export async function googleSilentSignIn(
   webClientId: string,
@@ -71,22 +90,33 @@ export async function googleSilentSignIn(
 }
 
 /**
- * Signs the user out.
- * On iOS it clears the stored Google session. On Android it clears the Credential Manager state,
- * so auto select does not sign the user back in.
+ * Clears the stored sign in state.
  *
- * [Available on Android and IOS].
+ * iOS: calls GoogleSignIn `signOut` (removes the Google session from the keychain, so
+ * {@link googleSilentSignIn} rejects afterwards). It does not affect Apple ID or passwords.
+ * Android: calls Credential Manager `clearCredentialState`, which turns off auto select for every
+ * provider until the user picks an account again.
+ *
+ * Resolves `true`. Rejects with `INVALID_RESULT_ERROR` (Android only) when clearing fails.
+ * Does not emit events.
  */
 export async function signOut(): Promise<boolean> {
   return await OauthEssentials.signOut();
 }
 
 /**
- * Gets the stored password.
- * If does not have an stored password, returns false.
+ * Shows the saved passwords of the app and resolves with the one the user picks.
  *
- * You should rely on PASSWORD_SUPPORTED constant to check if you can use this method.
- * [Available on Android and IOS].
+ * iOS: `ASAuthorizationPasswordProvider` request (iOS 16+ only offers credentials already saved on
+ * the device). Resolves `PASSWORD`, or the `CANCELLED` result when the user dismisses it or there
+ * is no saved password. Rejects with `INVALID_RESULT_ERROR` on other errors and
+ * `SIMULTANEOUS_CALL_ERROR` while a previous call is pending.
+ * Android: Credential Manager `GetPasswordOption`. Resolves `PASSWORD`, or `false` on any error
+ * (no saved password, cancelled...). Rejects with `NOT_SUPPORTED_ERROR` without Play Services and
+ * `NO_ACTIVITY_ERROR`.
+ *
+ * Emits `onCredentialSuccess` when it resolves a result object and `onCredentialFailure` when it
+ * rejects (not when Android resolves `false`).
  */
 export async function getPassword(): Promise<false | PasswordCredentialResult> {
   const result = await OauthEssentials.getPassword();
@@ -94,14 +124,16 @@ export async function getPassword(): Promise<false | PasswordCredentialResult> {
 }
 
 /**
- * Saves a username and password in the platform password manager.
- * @param {string} username
- * @param {string} password
+ * Saves a username and password in the platform password manager. It does not authenticate the
+ * user against anything.
  *
- * Returns false when the credential was not saved.
- * On iOS it always resolves false: saving requires an associated domain, use the
- * `textContentType` props of your inputs to let iOS offer to save it instead.
- * [Saves on Android only].
+ * iOS: does nothing and resolves `false` (iOS has no API to save a password without an associated
+ * domain; use the `textContentType` props of your inputs so iOS offers to save it).
+ * Android: Credential Manager `createCredential(CreatePasswordRequest)`, which shows the save
+ * prompt. Resolves `true` when saved, `false` on any error (including the user declining).
+ * Rejects with `NOT_SUPPORTED_ERROR` without Play Services and `NO_ACTIVITY_ERROR`.
+ *
+ * Does not emit events, except `onCredentialFailure` for the Android rejections.
  */
 export async function passwordSignIn(
   username: string,
@@ -111,16 +143,25 @@ export async function passwordSignIn(
 }
 
 /**
- * Initiates the Apple Sign-In process.
- * On IOS devices it handles it smoothly using the latest UI workflow.
- * On Android it dispatches the androidWebUrl to device default browser for handling it.
- * you need to implement on your backend the redirect logic and validation accordingly to the link below
- * @see [Apple Sign In REST API Documentation](https://developer.apple.com/documentation/signinwithapplerestapi)
+ * Signs in with Apple.
  *
- * @param {string} androidWebUrl - The web URL on Android where the user will complete the OAuth flow. **[Android only]**
- * @param {AppleSignInOptions} options
+ * iOS: native Sign in with Apple sheet requesting `fullName` and `email`, with `options.nonce` and
+ * `options.state`. Resolves `APPLE_ID`, or `CANCELLED` when the user dismisses it. Rejects with
+ * `INVALID_RESULT_ERROR` on other errors and `SIMULTANEOUS_CALL_ERROR` while a previous call is
+ * pending. Apple only sends `email`/`fullName` on the first authorization: this function keeps the
+ * first result of each `user` in memory (until the app is killed) and fills empty `email`/`fullName`
+ * with it.
+ * Android: opens `androidWebUrl` in a Custom Tab; `options` is ignored (put the nonce in your url).
+ * Your backend must run the Apple web flow and redirect to `<applicationId>://oauth/callback`.
+ * Resolves `WEB_APPLE_ID` with the redirect url, or `CANCELLED` when the user closes the tab or
+ * another browser session (`appleSignIn`/`oauthSignIn`) starts. Rejects with `INVALID_RESULT_ERROR`
+ * (invalid url), `NO_ACTIVITY_ERROR` or `BROWSER_UNAVAILABLE` (no browser installed).
  *
- * @returns {AppleIdCredentialResult|WebAppleIdCredentialResult} Returns AppleIdCredentialResult on IOS devices and WebAppleIdCredentialResult on android.
+ * Emits `onCredentialSuccess` / `onCredentialFailure`.
+ * @see [Sign in with Apple REST API](https://developer.apple.com/documentation/signinwithapplerestapi)
+ *
+ * @param androidWebUrl - Web url that starts the Apple flow. Required on Android, ignored on iOS.
+ * @param options - See {@link AppleSignInOptions}. iOS only.
  */
 export async function appleSignIn(
   androidWebUrl?: string,
@@ -162,11 +203,15 @@ export async function appleSignIn(
 }
 
 /**
- * Gets the Apple ID credential state of a user.
- * Call it on app start: when it is REVOKED or NOT_FOUND the user must be signed out.
- * @param userId - The `user` field of the AppleIdCredentialResult.
+ * Asks Apple whether the user is still signed in to the app with Apple ID, without UI
+ * (`ASAuthorizationAppleIDProvider.getCredentialState`).
+ * Call it on app start and sign the user out when it is not `AUTHORIZED`.
  *
- * [Available on IOS only, rejects with NOT_SUPPORTED_ERROR on Android].
+ * Resolves `AUTHORIZED`, `REVOKED`, `TRANSFERRED` or `NOT_FOUND`. Rejects with
+ * `INVALID_RESULT_ERROR` when the check fails, and always with `NOT_SUPPORTED_ERROR` on Android.
+ * Does not emit events.
+ *
+ * @param userId - The `user` field of the AppleIdCredentialResult.
  */
 export async function getAppleIdCredentialState(
   userId: string
@@ -177,8 +222,19 @@ export async function getAppleIdCredentialState(
 }
 
 /**
- * Performs all sign in methods available on the platform at once.
- * This is supposed to be used on app start to get any existing sign in.
+ * Shows a single picker with the credentials the user already has, meant for app start.
+ *
+ * iOS: Apple ID + saved passwords (`googleClientId` is ignored, Google is not included; only
+ * `options.nonce` is used, for Apple ID). On iOS 16+ only credentials already on the device are
+ * offered. Resolves `APPLE_ID` or `PASSWORD`, or `CANCELLED` when the user dismisses it or nothing
+ * is available. Rejects with `INVALID_RESULT_ERROR` or `SIMULTANEOUS_CALL_ERROR`.
+ * Android: Credential Manager with Google ID (bottom sheet option with `authorizedAccounts`,
+ * `autoSelectEnabled` and `nonce`) + saved passwords. Apple is not included and `mode`, `scopes`
+ * and `offlineAccess` are ignored. Resolves `GOOGLE_ID` or `PASSWORD`, or `CANCELLED`. Rejects with
+ * `NOT_SUPPORTED_ERROR` (no Play Services), `NO_ACTIVITY_ERROR`, `NO_SIGN_IN_AVAILABLE` or
+ * `INVALID_RESULT_ERROR`.
+ *
+ * Emits `onCredentialSuccess` / `onCredentialFailure`.
  */
 export async function hybridSignIn(
   googleClientId: string,
@@ -200,8 +256,20 @@ export async function hybridSignIn(
 }
 
 /**
- * Creates a passkey.
- * @param options
+ * Creates a passkey from a WebAuthn `PublicKeyCredentialCreationOptions` JSON (`requestJson`).
+ *
+ * iOS 16+: platform passkey registration. Reads `challenge`, `rp.id`, `user.id`, `user.name`,
+ * `authenticatorSelection.userVerification`, `attestation` and, on iOS 17.4+,
+ * `excludeCredentials`; other fields are ignored. `data` is a JSON string with `id`, `rawId`,
+ * `type` and `response.clientDataJSON`/`attestationObject` (base64url). Rejects with
+ * `NOT_SUPPORTED_ERROR` below iOS 16 and `SIMULTANEOUS_CALL_ERROR` while a passkey call is pending.
+ * Android 9+: Credential Manager `CreatePublicKeyCredentialRequest` with the whole JSON and
+ * `preferImmediatelyAvailableCredentials`. `data` is the registration response JSON returned by
+ * Credential Manager. Rejects with `NOT_SUPPORTED_ERROR` below Android 9 and `NO_ACTIVITY_ERROR`.
+ *
+ * Resolves `PASSKEY`, or `CANCELLED` when the user dismisses it. Rejects with
+ * `INVALID_RESULT_ERROR` for an invalid/missing `requestJson` and other errors.
+ * Emits `onCredentialSuccess` / `onCredentialFailure`. Send `data` to your server to verify it.
  */
 export async function createPassKey(
   options: PasskeyOptions
@@ -212,8 +280,25 @@ export async function createPassKey(
 }
 
 /**
- * Signs in with a passkey.
- * @param options
+ * Signs in with a passkey from a WebAuthn `PublicKeyCredentialRequestOptions` JSON (`requestJson`).
+ *
+ * iOS 16+: platform passkey assertion. Reads `challenge`, `rpId`, `allowCredentials` and
+ * `userVerification`. With `mediation: 'autofill'` it does not show a sheet: it waits until the user
+ * picks a passkey in the QuickType bar of a `textContentType="username"` field, and any other
+ * passkey call (or {@link cancelPassKeyAutoFill}) resolves it as `CANCELLED`. Otherwise it shows a
+ * sheet that only offers passkeys available on the device (no "other device" QR option), so it
+ * resolves `CANCELLED` when there is none. `data` is a JSON string with `id`, `rawId`, `type` and
+ * `response.clientDataJSON`/`authenticatorData`/`signature`/`userHandle` (base64url).
+ * Rejects with `NOT_SUPPORTED_ERROR` below iOS 16 and `SIMULTANEOUS_CALL_ERROR` while a modal
+ * passkey call is pending.
+ * Android 9+: Credential Manager `GetPublicKeyCredentialOption` with the whole JSON and
+ * `preferImmediatelyAvailableCredentials`; `mediation` is ignored. `data` is the authentication
+ * response JSON returned by Credential Manager. Rejects with `NOT_SUPPORTED_ERROR` below Android 9,
+ * `NO_ACTIVITY_ERROR` and `NO_SIGN_IN_AVAILABLE` (no passkey).
+ *
+ * Resolves `PASSKEY`, or `CANCELLED` when the user dismisses it. Rejects with
+ * `INVALID_RESULT_ERROR` for an invalid/missing `requestJson` and other errors.
+ * Emits `onCredentialSuccess` / `onCredentialFailure`. Send `data` to your server to verify it.
  */
 export async function getPassKey(
   options: PasskeyOptions
@@ -224,22 +309,37 @@ export async function getPassKey(
 }
 
 /**
- * Cancels a pending `getPassKey({ mediation: 'autofill' })` request,
- * for example when the sign in screen unmounts.
+ * Cancels a pending `getPassKey({ mediation: 'autofill' })` request, for example when the sign in
+ * screen unmounts. The cancelled `getPassKey` resolves `CANCELLED` (and emits it).
  *
- * [Available on IOS only, resolves false on Android].
+ * Resolves `true` when a pending AutoFill request was cancelled, `false` when there was none.
+ * Always resolves `false` on Android and below iOS 16.
  */
 export async function cancelPassKeyAutoFill(): Promise<boolean> {
   return await OauthEssentials.cancelPassKeyAutoFill();
 }
 
 /**
- * Signs in with any OAuth 2.0 / OpenID Connect provider using the authorization code flow
- * with PKCE, in a secure browser session (ASWebAuthenticationSession / Custom Tabs).
+ * Signs in with any OAuth 2.0 / OpenID Connect provider using the authorization code flow.
  *
- * On Android the redirect uri must be OAUTH_REDIRECT_URI, or you must route your own uri to
- * `com.oauthessentials.CustomTabsActivity` with an intent filter.
- * @param options
+ * 1. Generates a random `state` and a PKCE S256 verifier/challenge on the native side.
+ * 2. Builds `authorizationEndpoint?response_type=code&client_id&redirect_uri&state[&scope]
+ *    [&code_challenge&code_challenge_method=S256]` + `additionalParameters` (which override them).
+ * 3. Opens it in `ASWebAuthenticationSession` (iOS, `prefersEphemeralSession`, waits up to 2 seconds
+ *    for the app to be active) or a Custom Tab (Android) and waits for the redirect to `redirectUri`.
+ *    On Android the redirect must reach `CustomTabsActivity`: use `OAUTH_REDIRECT_URI` or add an
+ *    intent filter for your uri.
+ * 4. Checks that the returned `state` matches, then reads `code` (query or fragment).
+ * 5. When `tokenEndpoint` is set, POSTs `grant_type=authorization_code`, `code`, `client_id`,
+ *    `redirect_uri` and `code_verifier` as a form and returns the JSON response in `tokens`
+ *    (no client secret is sent, the id_token is not validated).
+ *
+ * Resolves `OAUTH`, or `CANCELLED` when the user closes the browser, the provider returns
+ * `error=access_denied` or (Android) another browser session starts.
+ * Rejects with `INVALID_RESULT_ERROR` (state mismatch, provider error, no code, token endpoint
+ * returned non 2xx), `BROWSER_UNAVAILABLE`, `NO_ACTIVITY_ERROR` (Android) or
+ * `SIMULTANEOUS_CALL_ERROR` (iOS). Network errors and non JSON token responses are thrown as is.
+ * Does not emit events.
  */
 export async function oauthSignIn(
   options: OAuthSignInOptions
@@ -325,7 +425,10 @@ function oauthError(message: string): Error & { code: string } {
 }
 
 /**
- * Listens to every successful (or cancelled) credential result.
+ * Called with the same `{ type, data }` the promise resolves with (including `CANCELLED`), for
+ * `googleSignIn`, `googleSilentSignIn`, `getPassword`, `appleSignIn`, `hybridSignIn`,
+ * `createPassKey` and `getPassKey`. Not called by `signOut`, `passwordSignIn`,
+ * `getAppleIdCredentialState`, `cancelPassKeyAutoFill` and `oauthSignIn`.
  */
 export function addCredentialSuccessListener(
   listener: (event: CredentialSuccessEvent) => void
@@ -334,7 +437,9 @@ export function addCredentialSuccessListener(
 }
 
 /**
- * Listens to every credential failure.
+ * Called with `{ code, message }` when one of the methods listed in
+ * {@link addCredentialSuccessListener} rejects. `SIMULTANEOUS_CALL_ERROR`, the iOS
+ * `NOT_SUPPORTED_ERROR` below iOS 16 and the iOS missing `requestJson` error are not emitted.
  */
 export function addCredentialFailureListener(
   listener: (event: CredentialFailureEvent) => void
@@ -343,8 +448,8 @@ export function addCredentialFailureListener(
 }
 
 /**
- * Listens to Apple ID revocation while the app is running.
- * Sign the user out when it fires. [iOS only]
+ * Called when iOS posts `credentialRevokedNotification`, i.e. the user stopped using Apple ID with
+ * the app while it is running. Sign the user out when it fires. Never called on Android.
  */
 export function addAppleIdCredentialRevokedListener(
   listener: () => void
@@ -396,39 +501,42 @@ function parseGoogleIdOptions(options?: GoogleSignInOptions) {
 const CONSTANTS = OauthEssentials.getConstants();
 
 /**
- * Google Play are supported.
- * It always false on IOS, cause IOS does not use Google Play Services.
+ * Android: Google Play Services are installed and up to date (read once, when the module loads).
+ * iOS: always false.
  */
 export const GOOGLE_PLAY_SERVICES_SUPPORTED =
   CONSTANTS.GOOGLE_PLAY_SERVICES_SUPPORTED;
 
 /**
- * The password method is supported.
+ * Always true. On Android `getPassword` and `passwordSignIn` still reject with
+ * `NOT_SUPPORTED_ERROR` without Play Services, so also check `GOOGLE_PLAY_SERVICES_SUPPORTED`.
  */
 export const PASSWORD_SUPPORTED = CONSTANTS.PASSWORD_SUPPORTED;
 
 /**
- * Google Play id sign in is supported.
- * You should mainly rely on this constant to check if you can use google sign in.
+ * iOS: always true. Android: same as `GOOGLE_PLAY_SERVICES_SUPPORTED`.
  */
 export const GOOGLE_ID_SUPPORTED = CONSTANTS.GOOGLE_ID_SUPPORTED;
 
 /**
- * Gets if Apple id sign in is supported.
+ * Always true (native on iOS, web flow in a Custom Tab on Android).
  */
 export const APPLE_ID_SUPPORTED = CONSTANTS.APPLE_ID_SUPPORTED;
 
 /**
- * Gets if "hybrid" is supported in this platform.
+ * Always true. On Android `hybridSignIn` still rejects with `NOT_SUPPORTED_ERROR` without Play
+ * Services.
  */
 export const HYBRID_SUPPORTED = CONSTANTS.HYBRID_SUPPORTED;
 
 /**
- * Gets if passkeys are supported.
+ * iOS 16+ / Android 9+ (API 28).
  */
 export const PASSKEYS_SUPPORTED = CONSTANTS.PASSKEYS_SUPPORTED;
 
 /**
- * Default redirect uri for `oauthSignIn`: `<bundle or application id>://oauth/callback`.
+ * Default redirect uri of `oauthSignIn`: `<bundle id, lowercased>://oauth/callback` on iOS and
+ * `<applicationId>://oauth/callback` on Android (the uri the library's `CustomTabsActivity`
+ * intent filter handles).
  */
 export const OAUTH_REDIRECT_URI = CONSTANTS.OAUTH_REDIRECT_URI;

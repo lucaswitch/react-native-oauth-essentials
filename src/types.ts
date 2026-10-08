@@ -17,34 +17,42 @@ export type GoogleSignInOptions = {
   mode?: 'bottomSheet' | 'button';
   /**
    * Nonce embedded as-is in the returned idToken, so your backend can prevent replay attacks.
+   * Ignored by `googleSilentSignIn` on iOS.
    */
   nonce?: string;
   /**
-   * Email or account id to preselect. [iOS only]
+   * Email to preselect in the Google page. [iOS only]
    */
   hint?: string;
   /**
-   * Restricts sign in to a Google Workspace domain.
+   * Restricts sign in to a Google Workspace domain. On Android it only applies to the
+   * "Sign in with Google" (`button`) flow and to the authorization step, not to the bottom sheet.
    */
   hostedDomain?: string;
   /**
-   * Additional OAuth scopes. When set, `accessToken` and `grantedScopes` are returned.
+   * Additional OAuth scopes the user must grant.
+   * iOS: requested during sign in; `accessToken` and `grantedScopes` are always returned.
+   * Android: requested in a second step (Authorization API, may show a consent screen); without
+   * `scopes`/`offlineAccess`, `accessToken` and `grantedScopes` are null.
    */
   scopes?: string[];
   /**
-   * Requests a `serverAuthCode` your backend can exchange for refresh tokens.
+   * Android: requests a `serverAuthCode` (for `serverClientId`, or the main client id) your backend
+   * can exchange for refresh tokens. iOS: no effect, `serverAuthCode` is returned whenever
+   * `serverClientId` is set.
    */
   offlineAccess?: boolean;
   /**
-   * Web (server) client id. Required on iOS for `offlineAccess` and to make the idToken
-   * audience your backend client. On Android the main client id is already the server client id.
+   * iOS: web (server) client id. Makes it the idToken audience and returns a `serverAuthCode`.
+   * Android: client id the `serverAuthCode` is issued for (defaults to the main client id).
    */
   serverClientId?: string;
 };
 
 export type AppleSignInOptions = {
   /**
-   * Nonce passed as-is to Apple. Firebase and Supabase expect the SHA-256 of the raw nonce here.
+   * Nonce passed as-is to Apple and embedded in the idToken. Firebase and Supabase expect the
+   * SHA-256 of the raw nonce here. [iOS only, on Android put it in your `androidWebUrl`]
    */
   nonce?: string;
   /**
@@ -56,8 +64,16 @@ export type AppleSignInOptions = {
 export type HybridSignInOptions = GoogleSignInOptions;
 
 export type PasskeyOptions = {
+  /**
+   * WebAuthn options JSON from your server: `PublicKeyCredentialCreationOptions` for
+   * `createPassKey`, `PublicKeyCredentialRequestOptions` for `getPassKey`.
+   */
   requestJson: string;
-  preferImmediatelyAvailableCredentials?: boolean; // [Android only]
+  /**
+   * Only offer credentials already available on the device. [Android only, iOS modal requests
+   * always behave this way]
+   */
+  preferImmediatelyAvailableCredentials?: boolean;
   /**
    * `autofill` shows passkeys in the QuickType bar of a text field with
    * `textContentType="username"` instead of a modal sheet. [iOS 16+ only]
@@ -105,13 +121,16 @@ export type PasswordCredentialResult = {
 export type GoogleIdCredentialResult = {
   type: CredentialsType.GOOGLE_ID;
   data: {
+    /** iOS: Google user id (the idToken `sub`). Android: the account email. */
     id: string;
     idToken: string;
     displayName: string;
     givenName: string;
     familyName: string;
     email?: string;
+    /** iOS: 200px picture url or "". */
     profilePictureUri?: string | null;
+    /** Android only. */
     phoneNumber?: string | null;
     accessToken?: string | null;
     serverAuthCode?: string | null;
@@ -190,11 +209,18 @@ export enum AppleIdCredentialState {
 }
 
 export enum CredentialError {
+  /** Not thrown by the native modules: missing Play Services rejects with NOT_SUPPORTED_ERROR. */
   NO_PLAY_SERVICES_ERROR = 'NO_PLAY_SERVICES_ERROR',
+  /** No Android activity, or no iOS view controller attached to a window, to present the UI. */
   NO_ACTIVITY_ERROR = 'NO_ACTIVITY_ERROR',
+  /** The provider failed or returned something unexpected; `message` has the native error. */
   INVALID_RESULT_ERROR = 'INVALID_RESULT_ERROR',
+  /** There is no credential to return (no account / passkey / previous sign in). */
   NO_SIGN_IN_AVAILABLE = 'NO_SIGN_IN_AVAILABLE',
+  /** iOS: the same method (or method group) is still waiting for the previous call. */
   SIMULTANEOUS_CALL_ERROR = 'SIMULTANEOUS_CALL_ERROR',
+  /** The OS version, missing Play Services or the platform does not support the method. */
   NOT_SUPPORTED_ERROR = 'NOT_SUPPORTED_ERROR',
+  /** The browser session could not be opened (app in background, Guided Access, no browser). */
   BROWSER_UNAVAILABLE = 'BROWSER_UNAVAILABLE',
 }

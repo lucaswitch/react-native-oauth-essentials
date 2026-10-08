@@ -333,14 +333,16 @@ Enum defining possible error codes that may be thrown during authentication oper
 
 **Values:**
 
-- `NO_PLAY_SERVICES_ERROR` - Google Play Services is not available or not installed on the device (Android only)
+- `NO_PLAY_SERVICES_ERROR` - Not thrown by the native modules (kept for compatibility). Missing Google Play Services
+  rejects with `NOT_SUPPORTED_ERROR`
 - `NO_ACTIVITY_ERROR` - No activity (Android) or view controller (iOS) is available to present the authentication flow
 - `INVALID_RESULT_ERROR` - The authentication result received from the provider is invalid or malformed (Both platforms)
 - `NO_SIGN_IN_AVAILABLE` - There is no credential to use: no previous sign in for `googleSilentSignIn`, no account or
   passkey on the device (Both platforms)
 - `SIMULTANEOUS_CALL_ERROR` - The same method was called again while the previous call is still pending; the first call
   keeps running (iOS)
-- `NOT_SUPPORTED_ERROR` - The method is not supported on this device or platform (Both platforms)
+- `NOT_SUPPORTED_ERROR` - The method is not supported on this device or platform: Google Play Services missing or
+  outdated (Android), passkeys below iOS 16 / Android 9, `getAppleIdCredentialState` on Android
 - `BROWSER_UNAVAILABLE` - The browser session could not be opened: the app is not active, Guided Access is on, the
   system refused to start `ASWebAuthenticationSession` ("Unable to open Safari."), or there is no browser on Android
 
@@ -352,8 +354,8 @@ import { googleSignIn, CredentialError } from 'react-native-oauth-essentials';
 try {
   const credential = await googleSignIn('YOUR_WEB_CLIENT_ID');
 } catch (error) {
-  if (error.code === CredentialError.NO_PLAY_SERVICES_ERROR) {
-    console.error('Please install Google Play Services');
+  if (error.code === CredentialError.NOT_SUPPORTED_ERROR) {
+    console.error('Please install or update Google Play Services');
   } else if (error.code === CredentialError.NO_ACTIVITY_ERROR) {
     console.error('Activity context not available');
   } else if (error.code === CredentialError.INVALID_RESULT_ERROR) {

@@ -19,6 +19,7 @@ import {
   APPLE_ID_SUPPORTED,
   HYBRID_SUPPORTED,
   PASSKEYS_SUPPORTED,
+  OAUTH_REDIRECT_URI,
 } from 'react-native-oauth-essentials';
 ```
 
@@ -26,18 +27,22 @@ import {
 
 | Constant | Type | Description | iOS | Android |
 |----------|------|-------------|-----|---------|
-| `GOOGLE_PLAY_SERVICES_SUPPORTED` | `boolean` | Google Play Services are available and up-to-date. Always `false` on iOS. | Always `false` | `true` if Play Services installed |
-| `PASSWORD_SUPPORTED` | `boolean` | Password credential manager is supported. | iOS 12+ | Android 7.0+ (API 24+) |
-| `GOOGLE_ID_SUPPORTED` | `boolean` | Google Sign-In is supported. Check this before calling `googleSignIn()`. | iOS 13+ | Android 8.0+ (API 26+) with Play Services |
-| `APPLE_ID_SUPPORTED` | `boolean` | Apple Sign-In is supported. | iOS 13+ | Android 8.0+ (API 26+) |
-| `HYBRID_SUPPORTED` | `boolean` | Hybrid sign-in is supported (multiple methods at once). | iOS 13+ | Android 8.0+ (API 26+) |
+| `GOOGLE_PLAY_SERVICES_SUPPORTED` | `boolean` | Google Play Services are installed and up-to-date. | Always `false` | `true` if Play Services are available |
+| `PASSWORD_SUPPORTED` | `boolean` | `getPassword()` / `passwordSignIn()` exist on the platform. | Always `true` | Always `true` (the methods still need Play Services) |
+| `GOOGLE_ID_SUPPORTED` | `boolean` | Google Sign-In can be used. Check this before calling `googleSignIn()`. | Always `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
+| `APPLE_ID_SUPPORTED` | `boolean` | Apple Sign-In can be used. | Always `true` (native) | Always `true` (web flow) |
+| `HYBRID_SUPPORTED` | `boolean` | `hybridSignIn()` exists on the platform. | Always `true` | Always `true` (the method still needs Play Services) |
 | `PASSKEYS_SUPPORTED` | `boolean` | Passkeys (WebAuthn/FIDO2) are supported. | iOS 16+ | Android 9.0+ (API 28+) |
 
-> **Note:** The values are determined at runtime by the module based on OS version, device capabilities, and installed services.
+> **Note:** The values are read once, when the module loads. On Android, `getPassword()`, `passwordSignIn()` and
+> `hybridSignIn()` reject with `NOT_SUPPORTED_ERROR` without Google Play Services even though `PASSWORD_SUPPORTED` and
+> `HYBRID_SUPPORTED` are `true`, so also check `GOOGLE_PLAY_SERVICES_SUPPORTED` before calling them.
 
 ### `OAUTH_REDIRECT_URI`
 
-`string`. The default redirect URI used by `oauthSignIn()`: `<bundle id or package name, lowercased on iOS>://oauth/callback`. Register this URI with your OAuth provider, or pass your own `redirectUri`. See [Generic OAuth](./usage/oauth.md).
+`string`. The default redirect URI used by `oauthSignIn()`: `<bundle id, lowercased>://oauth/callback` on iOS and
+`<applicationId>://oauth/callback` on Android (the URI the library's `CustomTabsActivity` handles; it is also where your
+Apple web flow must redirect on Android). Register this URI with your OAuth provider, or pass your own `redirectUri`. See [Generic OAuth](./usage/oauth.md).
 
 ## Platform Support Details
 
@@ -55,19 +60,18 @@ if (GOOGLE_PLAY_SERVICES_SUPPORTED) {
 
 - **iOS:** Always `false` (iOS doesn't use Google Play Services)
 - **Android:** `true` if Google Play Services are installed and up-to-date
-- **Required for:** Google Sign-In on Android
+- **Required for:** Google Sign-In, passwords and hybrid sign-in on Android
 
 ### Password Support
 
 ```ts
-if (PASSWORD_SUPPORTED) {
-  // Can use passwordSignIn() and getPassword()
-  await passwordSignIn(username, password);
+if (PASSWORD_SUPPORTED && (Platform.OS === 'ios' || GOOGLE_PLAY_SERVICES_SUPPORTED)) {
+  const credential = await getPassword();
 }
 ```
 
-- **iOS:** Supported on iOS 12+
-- **Android:** Supported on Android 7.0+ (API 24+)
+- **iOS:** Always `true`. `passwordSignIn()` resolves `false` without doing anything (use `textContentType` instead)
+- **Android:** Always `true`, but the methods reject with `NOT_SUPPORTED_ERROR` without Google Play Services
 - **Enables:** `passwordSignIn()` and `getPassword()` methods
 
 ### Google ID Support
@@ -79,10 +83,9 @@ if (GOOGLE_ID_SUPPORTED) {
 }
 ```
 
-- **iOS:** Supported on iOS 13+
-- **Android:** Supported on Android 8.0+ (API 26+) with Google Play Services
-- **Enables:** `googleSignIn()` method
-- **Note:** On Android, also check `GOOGLE_PLAY_SERVICES_SUPPORTED`
+- **iOS:** Always `true`
+- **Android:** Same as `GOOGLE_PLAY_SERVICES_SUPPORTED`
+- **Enables:** `googleSignIn()`, `googleSilentSignIn()` and `signOut()` methods
 
 ### Apple ID Support
 
@@ -93,11 +96,11 @@ if (APPLE_ID_SUPPORTED) {
 }
 ```
 
-- **iOS:** Supported on iOS 13+
+- **iOS:** Always `true`
   - Uses native `AuthenticationServices` framework
   - Returns `AppleIdCredentialResult` with full user data
-- **Android:** Supported on Android 8.0+ (API 26+)
-  - Uses Chrome Custom Tabs for OAuth flow
+- **Android:** Always `true`
+  - Uses Custom Tabs for the web OAuth flow
   - Returns `WebAppleIdCredentialResult` with redirect URL
   - **Requires backend implementation**
 - **Enables:** `appleSignIn()` method
@@ -111,10 +114,10 @@ if (HYBRID_SUPPORTED) {
 }
 ```
 
-- **iOS:** Supported on iOS 13+
-- **Android:** Supported on Android 8.0+ (API 26+)
+- **iOS:** Always `true`. Offers Apple ID + saved passwords
+- **Android:** Always `true`, but `hybridSignIn()` rejects with `NOT_SUPPORTED_ERROR` without Google Play Services.
+  Offers Google ID + saved passwords
 - **Enables:** `hybridSignIn()` method
-- **Checks:** All available sign-in methods at once
 
 ### Passkeys Support
 
@@ -127,7 +130,7 @@ if (PASSKEYS_SUPPORTED) {
 
 - **iOS:** Supported on iOS 16+
 - **Android:** Supported on Android 9.0+ (API 28+)
-- **Enables:** `createPassKey()` and `getPassKey()` methods
+- **Enables:** `createPassKey()`, `getPassKey()` and `cancelPassKeyAutoFill()` methods
 - **Standard:** WebAuthn/FIDO2 compliant
 
 ## Best Practices
@@ -141,10 +144,10 @@ if (PASSKEYS_SUPPORTED) {
    }
    ```
 
-2. **Check multiple constants for Google Sign-In on Android:**
+2. **Check Play Services for passwords and hybrid sign-in on Android:**
    ```ts
-   if (GOOGLE_ID_SUPPORTED && (Platform.OS === 'ios' || GOOGLE_PLAY_SERVICES_SUPPORTED)) {
-     await googleSignIn('...');
+   if (HYBRID_SUPPORTED && (Platform.OS === 'ios' || GOOGLE_PLAY_SERVICES_SUPPORTED)) {
+     await hybridSignIn('...');
    }
    ```
 

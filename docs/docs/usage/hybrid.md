@@ -15,7 +15,7 @@ desired authentication flow.
 
 > ⚠️ **Important:**
 > - Users **cannot choose** the platform methods - the OS presents available credentials
-> - **Google ID must be configured** for hybrid sign-in to work properly
+> - **Android:** Google ID must be configured (`googleClientId`). **iOS:** `googleClientId` is ignored, Google is not offered
 > - Always handle the `CANCELLED` case - users may dismiss the credential picker
 
 We **highly recommend** using hybrid sign-in as the **default** for unauthenticated users, while still providing
@@ -24,20 +24,19 @@ alternative sign-in options to cover all cases.
 ## Platform Support
 
 ### iOS
-- **Minimum:** iOS 13+
-- Checks for: Apple ID, Google ID, and saved passwords
-- Presents unified credential picker if multiple options available
-- Returns first selected credential
+- Offers: Apple ID and saved passwords (`ASAuthorizationController`). **Google ID is not included**
+- On iOS 16+ only credentials already on the device are offered
+- Resolves `CANCELLED` when the user dismisses it or nothing is available
+- Only `options.nonce` is used (for Apple ID)
 - Ideal for app launch to restore previous session
-- Check `HYBRID_SUPPORTED` constant before using
 
 ### Android
-- **Minimum:** Android 8.0+ (API 26+)
-- Checks for: Google ID and saved passwords (Apple requires Chrome Custom Tabs flow)
-- Uses Credential Manager to aggregate all options
-- Presents native Android credential picker
-- Returns first selected credential
-- Check `HYBRID_SUPPORTED` constant before using
+- Offers: Google ID (`GetGoogleIdOption`) and saved passwords. **Apple ID is not included** (use `appleSignIn()`)
+- Uses Credential Manager to aggregate the options in one bottom sheet
+- Requires Google Play Services: rejects with `NOT_SUPPORTED_ERROR` without them, even though `HYBRID_SUPPORTED` is
+  `true`
+- `authorizedAccounts`, `autoSelectEnabled` and `nonce` are used; `mode`, `scopes`, `offlineAccess` and `hostedDomain`
+  are ignored
 
 ## Methods
 
@@ -50,7 +49,7 @@ This is typically used on app startup to retrieve any existing sign-in credentia
 
 | Name             | Type                             | Description                                                                                             |
 |------------------|----------------------------------|---------------------------------------------------------------------------------------------------------|
-| `googleClientId` | `string`                         | The web client ID for Google Sign-In. Required for Google ID authentication.                            |
+| `googleClientId` | `string`                         | The web client ID for Google Sign-In. Used on Android only.                                             |
 | `options`        | `GoogleSignInOptions` (optional) | Optional configuration for Google Sign-In. See [GoogleSignInOptions](#googlesigninoptions) for details. |
 
 #### GoogleSignInOptions
@@ -59,10 +58,11 @@ This is typically used on app startup to retrieve any existing sign-in credentia
 type GoogleSignInOptions = {
   authorizedAccounts?: boolean;  // Android only: Filter to authorized accounts
   autoSelectEnabled?: boolean;   // Android only: Enable auto-selection
+  nonce?: string;                // Android: Google idToken nonce. iOS: Apple ID nonce
 };
 ```
 
-**Note:** Both options are **Android-only** and will be ignored on iOS.
+Other `GoogleSignInOptions` fields are ignored by `hybridSignIn`.
 
 #### Returns
 
@@ -70,7 +70,7 @@ type GoogleSignInOptions = {
 
 The promise resolves to whichever credential is available on the platform:
 
-**GoogleIdCredentialResult:**
+**GoogleIdCredentialResult (Android only):**
 ```typescript
 {
   type: CredentialsType.GOOGLE_ID;
@@ -124,23 +124,23 @@ The promise resolves to whichever credential is available on the platform:
 
 | Error Code | Description | Platform |
 |------------|-------------|----------|
-| `NO_PLAY_SERVICES_ERROR` | Google Play Services not available | Android only |
-| `NOT_SUPPORTED_ERROR` | Credential Manager not supported | Android only |
+| `NOT_SUPPORTED_ERROR` | Google Play Services not available or outdated | Android only |
 | `NO_ACTIVITY_ERROR` | No Android activity context available | Android only |
-| `INVALID_RESULT_ERROR` | Invalid result from authentication provider | Both |
+| `NO_SIGN_IN_AVAILABLE` | No Google account or saved password for the request | Android only |
+| `SIMULTANEOUS_CALL_ERROR` | A previous `hybridSignIn` is still pending | iOS only |
+| `INVALID_RESULT_ERROR` | The provider failed or returned an unexpected result | Both |
 
 #### Important Notes
 
 - Always check the platform support constants before using hybrid sign-in:
-  - `HYBRID_SUPPORTED` - Overall support
-  - `GOOGLE_ID_SUPPORTED` - Google support
-  - `APPLE_ID_SUPPORTED` - Apple support (iOS only)
-  - `PASSWORD_SUPPORTED` - Password support
+  - `HYBRID_SUPPORTED` - Always `true`
+  - `GOOGLE_PLAY_SERVICES_SUPPORTED` - Required on Android
 - On iOS, Apple ID and stored passwords may be returned
 - On Android, Google ID and stored passwords may be returned (Apple requires separate Chrome Custom Tabs flow)
 - Useful for automatically signing in users if credentials are already available
 - User can cancel, resulting in `CancelledCredentialResult`
 - Options `authorizedAccounts` and `autoSelectEnabled` only work on Android
+- Emits `onCredentialSuccess` / `onCredentialFailure`
 
 #### Example Usage (TypeScript)
 
@@ -296,14 +296,14 @@ async function initializeApp() {
 
 ## Platform-Specific Details
 
-### iOS (13+)
+### iOS
 - Presents native iOS credential picker sheet
 - Includes Apple ID if user is signed in to device
-- Includes Google ID if previously authorized
+- Does **not** include Google ID (use `googleSilentSignIn()` to restore a Google session)
 - Includes saved passwords from Keychain
 - User can select from available options or cancel
 
-### Android (8.0+ / API 26+)
+### Android (API 24+)
 - Uses Credential Manager API
 - Presents native Android bottom sheet
 - Includes Google ID if Google Play Services available
