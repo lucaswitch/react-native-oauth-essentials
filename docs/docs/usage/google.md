@@ -35,12 +35,20 @@ Performs Google ID sign-in on Android and iOS platforms.
 
 ```typescript
 type GoogleSignInOptions = {
-  authorizedAccounts?: boolean;  // Android only: Filter to authorized accounts
-  autoSelectEnabled?: boolean;   // Android only: Enable auto-selection
+  authorizedAccounts?: boolean;          // Android only: Filter to authorized accounts
+  autoSelectEnabled?: boolean;           // Android only: Enable auto-selection
+  mode?: 'bottomSheet' | 'button';       // Android only: UI flow (default 'bottomSheet')
+  nonce?: string;                        // Embedded in the idToken (replay protection)
+  hint?: string;                         // iOS only: Email to preselect
+  hostedDomain?: string;                 // Restrict to a Google Workspace domain
+  scopes?: string[];                     // Extra OAuth scopes (returns accessToken)
+  offlineAccess?: boolean;               // Returns serverAuthCode for your backend
+  serverClientId?: string;               // iOS: web client id (audience / serverAuthCode)
 };
 ```
 
-**Note:** Both options are **Android-only** and will be ignored on iOS.
+- `mode: 'button'` should be used when the user taps a "Sign in with Google" button. `bottomSheet` falls back to it automatically when no credential is available, unless `authorizedAccounts` is set.
+- `scopes` and `offlineAccess` trigger an extra consent step on Android (Authorization API). Declining it resolves `CANCELLED`.
 
 #### Returns
 
@@ -58,8 +66,12 @@ The promise resolves to:
     displayName: string;             // Full name
     givenName: string;               // First name
     familyName: string;              // Last name
+    email?: string;                  // Email
     profilePictureUri?: string | null;  // Profile picture URL
     phoneNumber?: string | null;     // Phone number (if available)
+    accessToken?: string | null;     // When `scopes` is set
+    serverAuthCode?: string | null;  // When `offlineAccess` is set
+    grantedScopes?: string[] | null; // Scopes the user granted
   };
 }
 ```
@@ -79,7 +91,10 @@ The method may throw errors with the following codes:
 | Error Code | Description | Platform |
 |------------|-------------|----------|
 | `NO_PLAY_SERVICES_ERROR` | Google Play Services not available or outdated | Android only |
-| `NO_ACTIVITY_ERROR` | No Android activity context available | Android only |
+| `NO_ACTIVITY_ERROR` | No activity / view controller to present from | Both |
+| `NO_SIGN_IN_AVAILABLE` | No Google account available for the requested filter (iOS: `googleSilentSignIn` only) | Both |
+| `BROWSER_UNAVAILABLE` | The sign-in sheet could not be opened (app in background, Guided Access, Safari restricted) | iOS only |
+| `SIMULTANEOUS_CALL_ERROR` | Another Google sign-in is still in progress | Both |
 | `INVALID_RESULT_ERROR` | Invalid result from authentication provider | Both |
 
 #### Important Notes
@@ -142,6 +157,22 @@ async function signInWithGoogle(): Promise<void> {
     }
   }
 }
+```
+
+### `googleSilentSignIn(webClientId: string, options?: GoogleSignInOptions)`
+
+Restores a previous Google session without showing any UI. Resolves `GoogleIdCredentialResult`, or `CANCELLED` when there is nothing to restore. Rejects with `NO_SIGN_IN_AVAILABLE` when no previous sign-in exists.
+
+```ts
+const credential = await googleSilentSignIn('YOUR_GOOGLE_WEB_CLIENT_ID');
+```
+
+### `signOut()`
+
+Clears the Google session on iOS and the Credential Manager state on Android, so the next `googleSignIn` does not auto-select the previous account.
+
+```ts
+await signOut();
 ```
 
 ## Setup Requirements

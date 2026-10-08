@@ -26,7 +26,7 @@
 
 ## Methods
 
-### `appleSignIn(androidWebUrl?: string)`
+### `appleSignIn(androidWebUrl?: string, options?: AppleSignInOptions)`
 
 Initiates the Apple Sign-In process.
 
@@ -35,6 +35,7 @@ Initiates the Apple Sign-In process.
 | Name | Type | Description |
 |------|------|-------------|
 | `androidWebUrl` | `string` (optional) | The URL for Android OAuth flow. **Required on Android, ignored on iOS.** |
+| `options` | `AppleSignInOptions` (optional) | `nonce` (passed as-is to Apple; Firebase/Supabase expect its SHA-256) and `state` (iOS only, returned in `data.state`). |
 
 #### Returns
 
@@ -53,6 +54,7 @@ The promise resolves to different result types depending on platform:
     email: string;                   // User's email (only on first sign-in)
     fullName: string;                // Full name (only on first sign-in)
     likelyReal: boolean;             // Indicates if user is likely real
+    state: string | null;            // `options.state`, echoed back
   };
 }
 ```
@@ -78,7 +80,11 @@ The method may throw errors with the following codes:
 | Error Code | Description | Platform |
 |------------|-------------|----------|
 | `NO_ACTIVITY_ERROR` | No Android activity context available | Android only |
+| `BROWSER_UNAVAILABLE` | No browser available to open `androidWebUrl` | Android only |
+| `SIMULTANEOUS_CALL_ERROR` | Another Apple sign-in is still in progress | iOS only |
 | `INVALID_RESULT_ERROR` | Invalid URL parameter or authentication result | Both |
+
+The user cancelling the sheet resolves `CANCELLED` instead of throwing.
 
 #### iOS Implementation Details
 
@@ -115,6 +121,20 @@ On Android, the method:
 - On iOS: email/fullName only provided on first sign-in - cache them!
 - On Android: `androidWebUrl` is required and must be implemented on your backend
 - The flow and return types are completely different between platforms
+
+### `getAppleIdCredentialState(user: string)` (iOS only)
+
+Returns `'AUTHORIZED' | 'REVOKED' | 'TRANSFERRED' | 'NOT_FOUND'` for the `user` returned by `appleSignIn()`. Apple recommends checking it on every app launch and signing the user out when it is not `AUTHORIZED`. Rejects with `NOT_SUPPORTED_ERROR` on Android.
+
+### `addAppleIdCredentialRevokedListener(listener)` (iOS only)
+
+Called when the user stops using Apple ID with your app while it is running.
+
+```ts
+const subscription = addAppleIdCredentialRevokedListener(() => signOutLocally());
+// later
+subscription.remove();
+```
 
 #### Example Usage (TypeScript)
 

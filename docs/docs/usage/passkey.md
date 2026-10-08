@@ -216,6 +216,38 @@ async function authenticateWithPasskey(): Promise<void> {
 }
 ```
 
+### Passkey AutoFill (iOS 16+)
+
+Pass `mediation: 'autofill'` to show the user's passkeys in the QuickType bar of the username field instead of a modal
+sheet. Start the request when the sign in screen mounts; the promise only settles when the user picks a passkey or the
+request is cancelled. The username `TextInput` must have `textContentType="username"` and `autoComplete="username"`.
+
+```tsx
+import { useEffect } from 'react';
+import { TextInput } from 'react-native';
+import { getPassKey, cancelPassKeyAutoFill, CredentialsType } from 'react-native-oauth-essentials';
+
+function SignInScreen() {
+  useEffect(() => {
+    getPassKey({ requestJson: JSON.stringify(requestOptions), mediation: 'autofill' })
+      .then((credential) => {
+        if (credential.type === CredentialsType.PASSKEY) {
+          verifyPasskeyWithBackend(JSON.parse(credential.data));
+        }
+      })
+      .catch(console.error);
+    return () => {
+      cancelPassKeyAutoFill();
+    };
+  }, []);
+
+  return <TextInput textContentType="username" autoComplete="username" />;
+}
+```
+
+A modal `getPassKey` or `createPassKey` call cancels the pending AutoFill request, which resolves as `CANCELLED`. On
+Android `mediation` is ignored and `cancelPassKeyAutoFill` resolves `false`.
+
 ## Best Practices
 
 1. **Always check `PASSKEYS_SUPPORTED`** before calling passkey methods

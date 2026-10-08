@@ -35,6 +35,10 @@ import {
 
 > **Note:** The values are determined at runtime by the module based on OS version, device capabilities, and installed services.
 
+### `OAUTH_REDIRECT_URI`
+
+`string`. The default redirect URI used by `oauthSignIn()`: `<bundle id or package name, lowercased on iOS>://oauth/callback`. Register this URI with your OAuth provider, or pass your own `redirectUri`. See [Generic OAuth](./usage/oauth.md).
+
 ## Platform Support Details
 
 ### Google Play Services (Android Only)

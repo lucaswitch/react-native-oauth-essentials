@@ -19,6 +19,17 @@ Configuration options for customizing the Google sign-in behavior.
   accounts on the device
 - `autoSelectEnabled` (boolean, optional) - **Android only.** Automatically selects a Google account if only one authorized account is
   available, skipping the account picker UI
+- `mode` (`'bottomSheet' | 'button'`, optional) - **Android only.** `bottomSheet` (default) shows the Credential Manager
+  sheet and, unless `authorizedAccounts` is set, falls back to `button` when no credential is available (no account or
+  the sheet is in cooldown after being dismissed). Use `button` for a "Sign in with Google" button tap
+- `nonce` (string, optional) - Embedded as-is in the `idToken`, so your backend can prevent replay attacks
+- `hint` (string, optional) - **iOS only.** Email or account id to preselect
+- `hostedDomain` (string, optional) - Restricts sign in to a Google Workspace domain
+- `scopes` (string[], optional) - Additional OAuth scopes; `accessToken` and `grantedScopes` are returned
+- `offlineAccess` (boolean, optional) - Returns a `serverAuthCode` your backend can exchange for a refresh token. On iOS
+  it requires `serverClientId`
+- `serverClientId` (string, optional) - **iOS only.** Web (server) client id, used as the `idToken` audience and for
+  `serverAuthCode`. On Android the client id passed to `googleSignIn` already is the server client id
 
 **Example:**
 
@@ -26,8 +37,28 @@ Configuration options for customizing the Google sign-in behavior.
 const options: GoogleSignInOptions = {
   authorizedAccounts: true,   // Android only
   autoSelectEnabled: false,   // Android only
+  nonce: 'random-nonce',
+  scopes: ['https://www.googleapis.com/auth/drive.readonly'],
 };
 ```
+
+### `AppleSignInOptions`
+
+- `nonce` (string, optional) - Passed as-is to Apple. Firebase and Supabase expect the SHA-256 of the raw nonce here
+- `state` (string, optional) - **iOS only.** Returned in `AppleIdCredentialResult.data.state`
+
+### `OAuthSignInOptions`
+
+Options of [`oauthSignIn`](./usage/oauth).
+
+- `authorizationEndpoint` (string, required)
+- `clientId` (string, required)
+- `redirectUri` (string, optional) - Defaults to `OAUTH_REDIRECT_URI`
+- `scopes` (string[], optional)
+- `additionalParameters` (Record<string, string>, optional) - Extra authorization url parameters, like `prompt`
+- `tokenEndpoint` (string, optional) - When set, the code is exchanged for tokens on the device
+- `usePKCE` (boolean, optional) - Defaults to `true`
+- `prefersEphemeralSession` (boolean, optional) - **iOS only.** Do not share cookies with Safari
 
 ### `PasskeyOptions`
 
@@ -37,7 +68,8 @@ Configuration options for creating or retrieving passkeys.
 
 - `requestJson` (string, required) - JSON string containing `PublicKeyCredentialCreationOptions` (for creation) or `PublicKeyCredentialRequestOptions` (for retrieval) as defined by the WebAuthn standard
 - `preferImmediatelyAvailableCredentials` (boolean, optional) - **Android only.** When `true`, only show passkeys that are immediately available without requiring additional user interaction
-- `isConditional` (boolean, optional) - **Android only.** When `true`, allows conditional UI for passkey selection
+- `mediation` (`'modal' | 'autofill'`, optional) - **iOS 16+ only.** `autofill` shows passkeys in the QuickType bar of
+  a text field with `textContentType="username"` instead of a modal sheet. See [Passkeys](./usage/passkey)
 
 **Example:**
 
@@ -60,7 +92,6 @@ const options: PasskeyOptions = {
     }
   }),
   preferImmediatelyAvailableCredentials: true,  // Android only
-  isConditional: false,  // Android only
 };
 ```
 
@@ -107,6 +138,10 @@ Represents the result of Google OAuth authentication.
   - `familyName` (string) - User's last name
   - `profilePictureUri` (string | null, optional) - URL to the user's profile picture, if available
   - `phoneNumber` (string | null, optional) - User's phone number, if shared and available
+  - `email` (string, optional) - User's email
+  - `accessToken` (string | null, optional) - Only when `scopes` or `offlineAccess` were requested (always on iOS)
+  - `grantedScopes` (string[] | null, optional) - Scopes granted to the `accessToken`
+  - `serverAuthCode` (string | null, optional) - Only with `offlineAccess` (Android) or `serverClientId` (iOS)
 
 **Example:**
 
@@ -299,8 +334,15 @@ Enum defining possible error codes that may be thrown during authentication oper
 **Values:**
 
 - `NO_PLAY_SERVICES_ERROR` - Google Play Services is not available or not installed on the device (Android only)
-- `NO_ACTIVITY_ERROR` - No Android activity context is available to perform the authentication flow (Android only)
+- `NO_ACTIVITY_ERROR` - No activity (Android) or view controller (iOS) is available to present the authentication flow
 - `INVALID_RESULT_ERROR` - The authentication result received from the provider is invalid or malformed (Both platforms)
+- `NO_SIGN_IN_AVAILABLE` - There is no credential to use: no previous sign in for `googleSilentSignIn`, no account or
+  passkey on the device (Both platforms)
+- `SIMULTANEOUS_CALL_ERROR` - The same method was called again while the previous call is still pending; the first call
+  keeps running (iOS)
+- `NOT_SUPPORTED_ERROR` - The method is not supported on this device or platform (Both platforms)
+- `BROWSER_UNAVAILABLE` - The browser session could not be opened: the app is not active, Guided Access is on, the
+  system refused to start `ASWebAuthenticationSession` ("Unable to open Safari."), or there is no browser on Android
 
 **Usage:**
 
