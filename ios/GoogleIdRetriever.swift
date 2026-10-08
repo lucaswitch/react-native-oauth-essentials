@@ -16,9 +16,30 @@ public class GoogleIdRetriever: RCTPromiseSettler {
     emitEvent: ((String, NSDictionary) -> Void)?
   ) {
     super.init(resolve: resolve, reject: reject, emitEvent: emitEvent)
+
+    // GIDSignIn raises an NSException (crashing the app) for a missing client id or URL scheme,
+    // so both are validated here and reported as CONFIGURATION_ERROR instead.
+    guard let clientId = Self.resolveClientId(clientId) else {
+      fail(
+        .configuration,
+        "Missing Google iOS client id: pass { iosClientId } or set GIDClientID in Info.plist"
+      )
+      return
+    }
+    let scheme = Self.urlScheme(for: clientId)
+    guard Self.registeredUrlSchemes().contains(scheme) else {
+      fail(
+        .configuration,
+        "Info.plist is missing the URL scheme \"\(scheme)\" required by Google Sign-In. Add it to "
+          + "CFBundleURLTypes > CFBundleURLSchemes (or use the Expo config plugin). "
+          + "\(clientId) must be the iOS client id; web client ids go in serverClientId."
+      )
+      return
+    }
+
     GIDSignIn.sharedInstance.configuration = GIDConfiguration(
       clientID: clientId,
-      serverClientID: options["serverClientId"] as? String,
+      serverClientID: options["serverClientId"] as? String ?? Self.infoPlistString("GIDServerClientID"),
       hostedDomain: options["hostedDomain"] as? String,
       openIDRealm: nil
     )
@@ -94,6 +115,34 @@ public class GoogleIdRetriever: RCTPromiseSettler {
     }
 
     succeed(CredentialFactory.fromGoogleId(user: user, serverAuthCode: serverAuthCode))
+  }
+
+  /// The client id passed from JS, or GIDClientID from Info.plist when it is empty.
+  private static func resolveClientId(_ clientId: String) -> String? {
+    let trimmed = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmed.isEmpty {
+      return trimmed
+    }
+    return infoPlistString("GIDClientID")
+  }
+
+  private static func infoPlistString(_ key: String) -> String? {
+    guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+          !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      return nil
+    }
+    return value
+  }
+
+  /// Same rule as GIDSignInCallbackSchemes: the reversed client id, lowercased.
+  private static func urlScheme(for clientId: String) -> String {
+    return clientId.split(separator: ".").reversed().joined(separator: ".").lowercased()
+  }
+
+  private static func registeredUrlSchemes() -> Set<String> {
+    let urlTypes = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+    let schemes = urlTypes.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+    return Set(schemes.map { $0.lowercased() })
   }
 
   /// GIDSignIn reports a failed ASWebAuthenticationSession start as an unknown error that only
