@@ -1,6 +1,7 @@
 package com.oauthessentials
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NO_HISTORY
 import android.os.Bundle
@@ -10,6 +11,7 @@ import com.oauthessentials.OauthEssentialsModule.Companion.DISPLAY_CUSTOM_TABS_I
 import com.oauthessentials.OauthEssentialsModule.Companion.LOG_TAG
 import com.oauthessentials.OauthEssentialsModule.Companion.WEB_APPLE_DEEP_LINK_RECEIVED_INTENT
 import com.oauthessentials.OauthEssentialsModule.Companion.WEB_APPLE_CANCELLED_INTENT
+import com.oauthessentials.OauthEssentialsModule.Companion.WEB_BROWSER_UNAVAILABLE_INTENT
 
 class CustomTabsActivity : Activity() {
   private var deepLinkReceived = false
@@ -108,7 +110,18 @@ class CustomTabsActivity : Activity() {
       val tabIntent =
         CustomTabsIntent.Builder().setShowTitle(true).setUrlBarHidingEnabled(true).build()
       tabIntent.intent.addFlags(FLAG_ACTIVITY_NO_HISTORY)
-      tabIntent.launchUrl(this, uri)
+      try {
+        tabIntent.launchUrl(this, uri)
+      } catch (e: ActivityNotFoundException) {
+        Log.e(LOG_TAG, "No browser available to open $uri")
+        resultProcessed = true
+        sendBroadcast(
+          Intent(WEB_BROWSER_UNAVAILABLE_INTENT).apply {
+            setPackage(applicationContext.packageName)
+          }
+        )
+        finish()
+      }
     }
   }
 

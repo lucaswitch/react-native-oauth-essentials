@@ -9,6 +9,7 @@ import androidx.credentials.PasswordCredential
 import androidx.credentials.PublicKeyCredential
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
 object CredentialFactory {
@@ -19,7 +20,8 @@ object CredentialFactory {
     APPLE_ID("APPLE_ID"),
     WEB_APPLE_ID("WEB_APPLE_ID"),
     CANCELLED("CANCELLED"),
-    PASSKEY("PASSKEY")
+    PASSKEY("PASSKEY"),
+    REDIRECT("REDIRECT")
   }
 
 
@@ -48,7 +50,10 @@ object CredentialFactory {
   /**
    * Creates from a response.
    */
-  fun fromCredentialResponse(result: GetCredentialResponse): WritableMap {
+  fun fromCredentialResponse(
+    result: GetCredentialResponse,
+    authorization: AuthorizationResult? = null
+  ): WritableMap {
     return Arguments.createMap().apply {
       val data = Arguments.createMap()
       when (val credential = result.credential) {
@@ -73,7 +78,15 @@ object CredentialFactory {
             data.putString("familyName", googleCred.familyName)
             data.putString("profilePictureUri", googleCred.profilePictureUri?.toString())
             data.putString("phoneNumber", googleCred.phoneNumber)
+            data.putString("email", googleCred.id)
             data.putBoolean("legacy", false)
+            data.putString("accessToken", authorization?.accessToken)
+            data.putString("serverAuthCode", authorization?.serverAuthCode)
+            if (authorization != null) {
+              data.putArray("grantedScopes", Arguments.fromList(authorization.grantedScopes))
+            } else {
+              data.putNull("grantedScopes")
+            }
           }
 
           else -> {
@@ -86,6 +99,15 @@ object CredentialFactory {
         }
       }
       putMap("data", data)
+    }
+  }
+
+  fun fromRedirect(url: String): WritableMap {
+    return Arguments.createMap().apply {
+      putString("type", CredentialsType.REDIRECT.code)
+      putMap("data", Arguments.createMap().apply {
+        putString("url", url)
+      })
     }
   }
 
