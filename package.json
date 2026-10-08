@@ -10,6 +10,8 @@
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
+    "./jest": "./jest/index.js",
+    "./app.plugin.js": "./app.plugin.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,6 +22,9 @@
     "cpp",
     "*.podspec",
     "react-native.config.js",
+    "app.plugin.js",
+    "plugin",
+    "jest",
     "!ios/build",
     "!android/build",
     "!android/gradle",
@@ -50,6 +55,7 @@
     "ios",
     "android",
     "expo",
+    "expo-config-plugin",
     "oauth",
     "oauth2",
     "auth",
@@ -71,9 +77,7 @@
     "google-sign-in",
     "openid",
     "openid-connect",
-    "biometric",
-    "mobile",
-    "web"
+    "mobile"
   ],
   "repository": {
     "type": "git",
