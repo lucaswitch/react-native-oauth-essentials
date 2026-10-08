@@ -55,7 +55,7 @@ Options of [`oauthSignIn`](./usage/oauth).
 - `clientId` (string, required)
 - `redirectUri` (string, optional) - Defaults to `OAUTH_REDIRECT_URI`
 - `scopes` (string[], optional)
-- `additionalParameters` (Record<string, string>, optional) - Extra authorization url parameters, like `prompt`
+- `additionalParameters` (`Record<string, string>`, optional) - Extra authorization url parameters, like `prompt`
 - `tokenEndpoint` (string, optional) - When set, the code is exchanged for tokens on the device
 - `usePKCE` (boolean, optional) - Defaults to `true`
 - `prefersEphemeralSession` (boolean, optional) - **iOS only.** Do not share cookies with Safari

@@ -14,6 +14,8 @@ API. It's a must-have for every React Native app.
 
 [Installation](./installation.md)
 
+[Setup with AI agents](./ai-setup.md)
+
 [Usage](./usage/hybrid.md)
 
 ## Short history

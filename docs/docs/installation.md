@@ -4,6 +4,10 @@ sidebar_position: 2
 
 # Installation
 
+:::tip Using a coding agent?
+Copy the [setup prompt for AI agents](./ai-setup.md) and paste it in your agent to install and configure everything.
+:::
+
 Install the library via npm:
 
 ```bash
