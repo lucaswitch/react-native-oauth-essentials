@@ -1,3 +1,6 @@
+import { createCredentialError } from './errors';
+import { CredentialError } from './types';
+
 export type PkcePair = {
   codeVerifier: string;
   codeChallenge: string;
@@ -76,7 +79,10 @@ export function parseRedirectParams(url: string): Record<string, string> {
 export function getUrlScheme(url: string): string {
   const index = url.indexOf(':');
   if (index <= 0) {
-    throw new Error(`Invalid redirect uri: ${url}`);
+    throw createCredentialError(
+      CredentialError.CONFIGURATION_ERROR,
+      `Invalid redirect uri: ${url}`
+    );
   }
   return url.slice(0, index);
 }

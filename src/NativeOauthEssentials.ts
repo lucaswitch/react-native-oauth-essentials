@@ -30,7 +30,9 @@ export interface Spec extends TurboModule {
    * iOS: GoogleSignIn `signIn` from the top most view controller. Android: Credential Manager
    * Google ID / "Sign in with Google" option, then the Authorization API when `scopes` or
    * `offlineAccess` are set. Resolves `GOOGLE_ID` or `CANCELLED`.
-   * @param androidAndIOSClientId - Web client id on Android, OAuth client id on iOS.
+   * @param androidAndIOSClientId - Web client id on Android, iOS client id on iOS ('' reads
+   * `GIDClientID` from Info.plist). Rejects `CONFIGURATION_ERROR` when it is missing or, on iOS,
+   * when its reversed URL scheme is not registered.
    * @param options - GoogleSignInOptions, already normalized by `index.tsx`.
    */
   googleSignIn(androidAndIOSClientId: string, options: Object): Promise<Object>;
@@ -73,8 +75,8 @@ export interface Spec extends TurboModule {
   passwordSignIn(username: string, password: string): Promise<boolean>;
 
   /**
-   * Shows the saved passwords. Resolves `PASSWORD`; when there is none or the user dismisses it,
-   * resolves `CANCELLED` on iOS and `false` on Android.
+   * Shows the saved passwords. Resolves `PASSWORD`, or `CANCELLED` when there is none or the user
+   * dismisses it.
    */
   getPassword(): Promise<Object>;
 

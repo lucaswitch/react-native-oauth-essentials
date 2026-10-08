@@ -49,6 +49,29 @@ export type GoogleSignInOptions = {
   serverClientId?: string;
 };
 
+/**
+ * Google OAuth client ids per platform, all from the same Google Cloud project.
+ */
+export type GoogleClientIds = {
+  /**
+   * iOS client id (created with the iOS bundle id). Used on iOS only. When missing, the `GIDClientID`
+   * key of Info.plist is used.
+   */
+  iosClientId?: string;
+  /**
+   * Web client id. Android: the client id passed to Credential Manager (required). iOS: the default
+   * `serverClientId` (idToken audience); when missing, the `GIDServerClientID` key of Info.plist is
+   * used.
+   */
+  webClientId?: string;
+};
+
+/**
+ * A {@link GoogleClientIds} object, or a single client id string, used as is on both platforms
+ * (it must be the iOS client id on iOS and the web client id on Android).
+ */
+export type GoogleClientId = string | GoogleClientIds;
+
 export type AppleSignInOptions = {
   /**
    * Nonce passed as-is to Apple and embedded in the idToken. Firebase and Supabase expect the
@@ -187,7 +210,7 @@ export type CredentialSuccessEvent = {
 };
 
 export type CredentialFailureEvent = {
-  code: string;
+  code: CredentialErrorCode;
   message: string;
 };
 
@@ -209,7 +232,9 @@ export enum AppleIdCredentialState {
 }
 
 export enum CredentialError {
-  /** Not thrown by the native modules: missing Play Services rejects with NOT_SUPPORTED_ERROR. */
+  /**
+   * @deprecated Never thrown: missing Play Services rejects with `NOT_SUPPORTED_ERROR`.
+   */
   NO_PLAY_SERVICES_ERROR = 'NO_PLAY_SERVICES_ERROR',
   /** No Android activity, or no iOS view controller attached to a window, to present the UI. */
   NO_ACTIVITY_ERROR = 'NO_ACTIVITY_ERROR',
@@ -223,4 +248,19 @@ export enum CredentialError {
   NOT_SUPPORTED_ERROR = 'NOT_SUPPORTED_ERROR',
   /** The browser session could not be opened (app in background, Guided Access, no browser). */
   BROWSER_UNAVAILABLE = 'BROWSER_UNAVAILABLE',
+  /**
+   * The app is misconfigured: missing Google client id, missing iOS URL scheme (the message has
+   * the exact scheme to add) or an invalid `redirectUri`.
+   */
+  CONFIGURATION_ERROR = 'CONFIGURATION_ERROR',
+  /** `oauthSignIn`: the token endpoint request failed (offline, DNS, TLS...). */
+  NETWORK_ERROR = 'NETWORK_ERROR',
 }
+
+/** A {@link CredentialError} value, as an enum member or its string. */
+export type CredentialErrorCode = `${CredentialError}`;
+
+/** Every promise of the library rejects with an `Error` that has one of these codes. */
+export type OauthEssentialsError<
+  C extends CredentialErrorCode = CredentialErrorCode
+> = Error & { code: C };

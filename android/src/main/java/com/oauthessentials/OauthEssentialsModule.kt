@@ -142,7 +142,8 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
 
   @SuppressLint("ObsoleteSdkInt")
   override fun getTypedExportedConstants(): MutableMap<String, Any> {
-    val hasCredentialManager = getCredentialManagerSupported()
+    // Passwords and hybrid sign in go through Credential Manager, which needs Play Services.
+    val hasCredentialManager = getCredentialManagerSupported() && hasGooglePlayServices()
     return mutableMapOf(
       "GOOGLE_PLAY_SERVICES_SUPPORTED" to hasGooglePlayServices(),
       "PASSWORD_SUPPORTED" to hasCredentialManager,
@@ -155,6 +156,8 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   }
 
   override fun hybridSignIn(clientId: String, options: ReadableMap, promise: Promise) {
+    if (rejectIfMissingClientId(clientId, promise)) return
+
     if (!hasGooglePlayServices()) {
       rejectAndEmitEvent(
         CredentialError.NOT_SUPPORTED_ERROR.code,
@@ -266,6 +269,8 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
    */
   override fun googleSignIn(clientId: String, options: ReadableMap, promise: Promise) {
     Log.d(LOG_TAG, "Calling googleSignIn")
+    if (rejectIfMissingClientId(clientId, promise)) return
+
     if (!googleIdSupported() || !getCredentialManagerSupported()) {
       rejectAndEmitEvent(
         CredentialError.NOT_SUPPORTED_ERROR.code,
@@ -319,6 +324,8 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
    * Signs in with an account that already signed in to the app, auto selecting it when possible.
    */
   override fun googleSilentSignIn(clientId: String, options: ReadableMap, promise: Promise) {
+    if (rejectIfMissingClientId(clientId, promise)) return
+
     if (!googleIdSupported() || !getCredentialManagerSupported()) {
       rejectAndEmitEvent(
         CredentialError.NOT_SUPPORTED_ERROR.code,
@@ -396,9 +403,14 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
         resolveAndEmit(
           CredentialFactory.fromCredentialResponse(result), promise
         )
+      } catch (e: GetCredentialCancellationException) {
+        resolveAndEmit(CredentialFactory.fromCancelled(), promise)
+      } catch (e: NoCredentialException) {
+        // Same as iOS: no saved password is reported as cancelled.
+        resolveAndEmit(CredentialFactory.fromCancelled(), promise)
       } catch (e: Throwable) {
         Log.d(LOG_TAG, e.toString())
-        promise.resolve(false)
+        rejectAndEmitEvent(CredentialError.INVALID_RESULT_ERROR.code, e, promise)
       }
     }
   }
@@ -771,6 +783,19 @@ class OauthEssentialsModule(reactContext: ReactApplicationContext) :
   /**
    * Reject and emit event.
    */
+  /**
+   * Credential Manager needs the web client id; JS passes '' when `{ webClientId }` is missing.
+   */
+  private fun rejectIfMissingClientId(clientId: String, promise: Promise): Boolean {
+    if (clientId.isNotBlank()) return false
+    rejectAndEmitEvent(
+      CredentialError.CONFIGURATION_ERROR.code,
+      "Missing Google web client id: pass { webClientId } (the web client id, not the Android one)",
+      promise
+    )
+    return true
+  }
+
   private fun rejectAndEmitEvent(code: String, e: Throwable, promise: Promise) {
     promise.reject(code, e.message ?: e.toString(), e)
     emitFailure(code, e.message ?: e.toString())
