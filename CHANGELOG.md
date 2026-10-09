@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.0](https://github.com/lucaswitch/react-native-oauth-essentials/compare/v1.0.12...v1.1.0) (2026-10-09)
+
+### Features
+
+* **expo:** resolve Google client ids from Firebase files and configure Android ([65d9b65](https://github.com/lucaswitch/react-native-oauth-essentials/commit/65d9b65))
+* read Google client ids from the app config and explain missing native module ([758cdc0](https://github.com/lucaswitch/react-native-oauth-essentials/commit/758cdc0))
+* add Expo config plugin and Jest mock ([6e0114d](https://github.com/lucaswitch/react-native-oauth-essentials/commit/6e0114d))
+* accept { iosClientId, webClientId }, typed errors and dev warnings ([338c574](https://github.com/lucaswitch/react-native-oauth-essentials/commit/338c574))
+* add oauthSignIn, googleSilentSignIn, signOut and Apple ID credential state ([2386ae7](https://github.com/lucaswitch/react-native-oauth-essentials/commit/2386ae7))
+* **android:** add google button flow, scopes/offline access, signOut and generic OAuth ([669ff5e](https://github.com/lucaswitch/react-native-oauth-essentials/commit/669ff5e))
+
+### Bug Fixes
+
+* **ios:** pre-check the browser and skip the URL scheme check on silent sign in ([533be1f](https://github.com/lucaswitch/react-native-oauth-essentials/commit/533be1f))
+* reserve OAuth params, keep malformed redirect values and relax the Expo iOS check ([e76c28c](https://github.com/lucaswitch/react-native-oauth-essentials/commit/e76c28c))
+* **ios:** reject CONFIGURATION_ERROR instead of crashing on missing Google URL scheme ([6df5935](https://github.com/lucaswitch/react-native-oauth-essentials/commit/6df5935))
+* **ios:** open Google sign-in from the main thread and report BROWSER_UNAVAILABLE ([dd49179](https://github.com/lucaswitch/react-native-oauth-essentials/commit/dd49179))
+
 ## <small>1.0.9 (2026-02-13)</small>
 
 * feat: add better keywords ([8f6063a](https://github.com/lucaswitch/react-native-oauth-essentials/commit/8f6063a))
