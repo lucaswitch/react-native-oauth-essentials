@@ -34,13 +34,15 @@ Exact API reference: https://lucaswitch.github.io/react-native-oauth-essentials/
    or Expo.
 2. The library is a TurboModule and only works with the **New Architecture** enabled (`newArchEnabled=true` in
    `android/gradle.properties`, `RCT_NEW_ARCH_ENABLED=1` / default on iOS; it is the default since RN 0.76). Check it.
-3. Expo: it is **not** supported in Expo Go; it needs a development build (`npx expo prebuild` +
-   `npx expo run:ios|android`, or EAS Build). Do the iOS native config with the library's config plugin in `app.json`
-   (`["react-native-oauth-essentials", { "google": { "iosClientId", "webClientId" }, "appleSignIn": true,
+3. Expo: it is **not** supported in Expo Go (Expo Go only contains the Expo SDK native code; importing the library there
+   throws an error saying so); it needs a development build (`npx expo run:ios|android`, or
+   `eas build --profile development`). Do the native config with the library's config plugin in `app.json`
+   (`["react-native-oauth-essentials", { "google": true | { "iosClientId", "webClientId" }, "appleSignIn": true,
    "webCredentialsDomains": ["<domain>"] }]`, only the keys of the chosen features) instead of editing the generated
-   `ios/` folder: see https://lucaswitch.github.io/react-native-oauth-essentials/docs/expo. Android needs nothing from
-   the plugin; any Android change below that is not in the plugin (custom redirect intent filter) is lost when
-   `android/` is regenerated, so tell me about it.
+   `ios/` / `android/` folders: see https://lucaswitch.github.io/react-native-oauth-essentials/docs/expo. `google: true`
+   reads the ids from the Firebase files set in `ios.googleServicesFile` / `android.googleServicesFile`. Any Android
+   change below that is not in the plugin (custom redirect intent filter) is lost when `android/` is regenerated, so
+   tell me about it.
 4. Read the iOS bundle identifier (Xcode project / `app.json`) and the Android `applicationId`
    (`android/app/build.gradle`).
 5. Ask me which features I want: Google, Apple, saved passwords, passkeys, generic OAuth/OpenID Connect provider,
@@ -54,7 +56,10 @@ Exact API reference: https://lucaswitch.github.io/react-native-oauth-essentials/
 
 ## Step 2: Google (if chosen)
 
-Ask me for the client ids. They come from Google Cloud Console > APIs & Services > Credentials, all in the same project:
+First check for Firebase config files (`GoogleService-Info.plist`, `google-services.json`): when Google is enabled in
+Firebase Authentication (with the SHA-1 added to the Firebase Android app), Firebase creates the OAuth clients and the
+files contain the ids (`CLIENT_ID` / `REVERSED_CLIENT_ID` in the plist; `client_type` 3 = web in the json). Otherwise
+ask me for the client ids. They come from Google Cloud Console > APIs & Services > Credentials, all in the same project:
 
 - **Web client id**: `webClientId`. Android passes it to Credential Manager; iOS uses it as the default
   `serverClientId` (idToken audience and `serverAuthCode`).
@@ -64,10 +69,14 @@ Ask me for the client ids. They come from Google Cloud Console > APIs & Services
 - **iOS client id**: created with the iOS bundle id. It is the `iosClientId` (a web client id does not work as the iOS
   client id).
 
-iOS config: the reversed iOS client id (split by `.`, reversed, joined) must be a URL scheme in `ios/<App>/Info.plist`.
-If it is missing, `googleSignIn` / `googleSilentSignIn` reject with `CONFIGURATION_ERROR` and the error `message` has the
-exact scheme to add. Expo: use the plugin's `google` option instead (it adds the scheme plus `GIDClientID` /
-`GIDServerClientID`).
+Prefer putting the ids in the app config, so the code calls `googleSignIn()` without client ids. Expo: the plugin's
+`google` option does all of it (`true` with the Firebase files, or `{ iosClientId, webClientId }`). Bare React Native:
+
+iOS config: the reversed iOS client id (split by `.`, reversed, joined) must be a URL scheme in `ios/<App>/Info.plist`
+(always, even with Firebase: it is `REVERSED_CLIENT_ID`). If it is missing, `googleSignIn` / `googleSilentSignIn` reject
+with `CONFIGURATION_ERROR` and the error `message` has the exact scheme to add. Also add `GIDClientID` (iOS client id)
+and `GIDServerClientID` (web client id); without `GIDClientID`, iOS reads `CLIENT_ID` of a `GoogleService-Info.plist` in
+the app target.
 
 ```xml
 <key>CFBundleURLTypes</key>
@@ -84,15 +93,22 @@ exact scheme to add. Expo: use the plugin's `google` option instead (it adds the
 
 Merge with an existing `CFBundleURLTypes` array instead of adding a second key.
 
+Android config: add the **web** client id inside `<application>` of `android/app/src/main/AndroidManifest.xml`
+(not needed when the app applies the Firebase `google-services` Gradle plugin with `google-services.json`, which
+generates `default_web_client_id`):
+
+```xml
+<meta-data android:name="com.oauthessentials.GOOGLE_WEB_CLIENT_ID" android:value="WEB_CLIENT_ID" />
+```
+
 Code:
 
 ```ts
 import { googleSignIn, CredentialsType } from 'react-native-oauth-essentials';
 
-// Each platform picks its own: iOS uses iosClientId (+ webClientId as serverClientId), Android uses webClientId.
-const GOOGLE_CLIENT_IDS = { iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID };
-
-const result = await googleSignIn(GOOGLE_CLIENT_IDS, {
+// Ids read from the app config. Alternative: googleSignIn({ iosClientId, webClientId }, options)
+// (iOS uses iosClientId + webClientId as serverClientId, Android uses webClientId).
+const result = await googleSignIn({
   mode: 'button', // Android: use 'button' when the user taps a "Sign in with Google" button
   // nonce, hostedDomain, scopes, offlineAccess: see the docs, behavior differs per platform
 });
@@ -102,7 +118,7 @@ if (result.type === CredentialsType.GOOGLE_ID) {
 }
 ```
 
-Also wire `googleSilentSignIn(GOOGLE_CLIENT_IDS)` on app start to restore the session (rejects with
+Also wire `googleSilentSignIn()` on app start to restore the session (rejects with
 `NO_SIGN_IN_AVAILABLE` when there is none) and `signOut()` on logout.
 
 ## Step 3: Apple (if chosen)
@@ -179,7 +195,8 @@ Ask me for the provider's authorization endpoint, client id, scopes, and whether
 
 ## Step 7: hybrid sign in (if chosen)
 
-`hybridSignIn(GOOGLE_CLIENT_IDS, { authorizedAccounts: true })` on app start (Android uses `webClientId`). Providers
+`hybridSignIn({ authorizedAccounts: true })` on app start (Android uses the web client id from the app config, or
+pass `{ webClientId }` first). Providers
 differ:
 - iOS: Apple ID + saved passwords only (Google is not offered, the client id is ignored).
 - Android: Google + saved passwords only (needs Play Services; gate it with `HYBRID_SUPPORTED`).
@@ -192,7 +209,7 @@ Create one auth module (e.g. `src/auth/`) that wraps the calls and follows these
 - Dismissing any UI **resolves** `{ type: 'CANCELLED', data: null }`. Do not show an error for it.
 - Errors reject with `error.code` from `CredentialError`. Narrow them in `catch` with
   `isCredentialError(e, CredentialError.X)` (or `isCredentialError(e)` for any library error). Handle at least:
-  - `CONFIGURATION_ERROR` (missing client id, missing iOS URL scheme, invalid `redirectUri`): a setup bug, log
+  - `CONFIGURATION_ERROR` (no client id passed or in the app config, missing iOS URL scheme, invalid `redirectUri`): a setup bug, log
     `e.message` (it says what to fix) and do not show it as a user error;
   - `BROWSER_UNAVAILABLE` (iOS: app not active, Guided Access; Android: no browser), to ask the user to retry;
   - `NETWORK_ERROR` (`oauthSignIn` token request failed), to ask the user to retry;
@@ -208,9 +225,10 @@ Create one auth module (e.g. `src/auth/`) that wraps the calls and follows these
 
 1. Run the project's typecheck and lint. If the project has Jest tests, add
    `jest.mock('react-native-oauth-essentials', () => require('react-native-oauth-essentials/jest'));` to the Jest setup
-   file (`setupFiles`) so tests do not fail with a `TurboModuleRegistry.getEnforcing` error, and run them.
+   file (`setupFiles`) so tests do not fail with a `native module "OauthEssentials" was not found` error, and run them.
 2. Build iOS (`npx react-native run-ios` or `xcodebuild`) and Android (`cd android && ./gradlew assembleDebug`) and fix
-   build errors.
+   build errors. If the app throws `native module "OauthEssentials" was not found`, the binary was not rebuilt after
+   installing (reloading Metro is not enough) or the New Architecture is off.
 3. Report what you could not verify and what I must do by hand: console setup, SHA fingerprints, server files
    (apple-app-site-association, assetlinks.json, Apple web flow), and testing on real devices. Google on Android needs a
    device/emulator with Google Play; passkeys need a real device or an emulator with a Google account and screen lock.
@@ -220,7 +238,7 @@ Create one auth module (e.g. `src/auth/`) that wraps the calls and follows these
 
 | Feature | Native config the agent does | What you still do |
 |---|---|---|
-| Google | iOS URL scheme (Expo plugin or Info.plist), `{ iosClientId, webClientId }` in code | Create the Web, Android (SHA-1) and iOS client ids |
+| Google | Expo plugin, or Info.plist (URL scheme, `GIDClientID`) + AndroidManifest meta-data, so the code calls `googleSignIn()` | Create the Web, Android (SHA-1) and iOS client ids (or let Firebase create them) |
 | Apple | iOS entitlement (Expo plugin or entitlements file), Android redirect | Enable it on the App ID; Android backend web flow |
 | Passwords | `textContentType` on inputs | Associated domain (iOS) |
 | Passkeys | Associated Domains entitlement (Expo plugin or entitlements file) | Serve `apple-app-site-association` and `assetlinks.json` |

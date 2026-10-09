@@ -4,9 +4,10 @@ sidebar_position: 2.2
 
 # Expo
 
-The library ships an Expo config plugin (`app.plugin.js`) that writes the iOS native config for you. It is **not**
-supported in Expo Go: use a development build (`npx expo prebuild` / `npx expo run:ios`, or EAS Build). The New
-Architecture must be enabled (the default since SDK 52).
+The library ships an Expo config plugin (`app.plugin.js`) that writes the native config for you. It is **not**
+supported in Expo Go (see [why](#why-it-does-not-run-in-expo-go)): use a development build (`npx expo prebuild` /
+`npx expo run:ios` / `npx expo run:android`, or EAS Build). The New Architecture must be enabled (the default since
+SDK 52).
 
 ## Setup
 
@@ -36,35 +37,69 @@ Add the plugin to `app.json` (or `app.config.js`) with only the features you use
 }
 ```
 
-Then regenerate the native project: `npx expo prebuild` (or `npx expo run:ios`, which runs it).
+Then regenerate the native project: `npx expo prebuild` (or `npx expo run:ios` / `npx expo run:android`, which run it).
 
 ## Options
 
-All options are optional and only change iOS files. Android needs nothing from the plugin.
+All options are optional.
 
-| Option | Type | What it writes |
-|---|---|---|
-| `google` | `{ iosClientId: string; webClientId?: string }` | Info.plist: the reversed `iosClientId` URL scheme in `CFBundleURLTypes` (not added twice), `GIDClientID` = `iosClientId` and, with `webClientId`, `GIDServerClientID` = `webClientId` |
-| `appleSignIn` | `boolean` | Entitlements: `com.apple.developer.applesignin` = `["Default"]` |
-| `webCredentialsDomains` | `string[]` | Entitlements: `webcredentials:<domain>` for each domain in `com.apple.developer.associated-domains`, merged with the existing ones (used by passkeys and saved passwords) |
+| Option | Type | iOS | Android |
+|---|---|---|---|
+| `google` | `true \| { iosClientId?: string; webClientId?: string }` | Info.plist: the reversed iOS client id URL scheme in `CFBundleURLTypes` (not added twice), `GIDClientID` = iOS client id and, when a web client id is found, `GIDServerClientID` = web client id | AndroidManifest: `<meta-data android:name="com.oauthessentials.GOOGLE_WEB_CLIENT_ID">` = web client id |
+| `appleSignIn` | `boolean` | Entitlements: `com.apple.developer.applesignin` = `["Default"]` | Nothing |
+| `webCredentialsDomains` | `string[]` | Entitlements: `webcredentials:<domain>` for each domain in `com.apple.developer.associated-domains`, merged with the existing ones (used by passkeys and saved passwords) | Nothing |
 
 ### `google`
 
-`iosClientId` is required when `google` is set (prebuild fails without it). The URL scheme is the client id split by
-`.`, reversed and joined: `1234-abcd.apps.googleusercontent.com` becomes `com.googleusercontent.apps.1234-abcd`.
-Without it, Google Sign-In rejects with `CONFIGURATION_ERROR`.
+The client ids come from the plugin options or, when missing, from the [Firebase config files](#using-firebase-config-files)
+set in the Expo config. Ids passed to the plugin win over the files.
 
-Because `GIDClientID` and `GIDServerClientID` are in Info.plist, iOS can read the client ids from there, so you can pass
-only the web client id in code:
+- **iOS client id**: required (prebuild fails with a clear error when none is found). The URL scheme is the client id
+  split by `.`, reversed and joined: `1234-abcd.apps.googleusercontent.com` becomes
+  `com.googleusercontent.apps.1234-abcd`. Without it, Google Sign-In rejects with `CONFIGURATION_ERROR`.
+- **Web client id**: prebuild only warns when none is found. Android sign in then rejects with `CONFIGURATION_ERROR`
+  (unless you pass `{ webClientId }` in code), and the iOS idToken audience is the iOS client id.
+
+Because the ids are in Info.plist and AndroidManifest, the native side reads them from there, so call the methods
+without client ids:
 
 ```ts
 import { googleSignIn } from 'react-native-oauth-essentials';
 
-const result = await googleSignIn({ webClientId: WEB_CLIENT_ID }); // iOS reads GIDClientID from Info.plist
+const result = await googleSignIn(); // or googleSignIn({ mode: 'button' })
 ```
 
-Passing `{ iosClientId, webClientId }` also works. See [Google Sign-In](./usage/google.md) and the
-[Google OAuth setup](./google-oauth-setup.md) to create the client ids.
+Passing `{ iosClientId, webClientId }` in code also works and wins over the config. See
+[Google Sign-In](./usage/google.md) and the [Google OAuth setup](./google-oauth-setup.md) to create the client ids.
+
+### Using Firebase config files
+
+With Firebase, set `google: true` and point the Expo config to the Firebase files: the plugin reads the ids from them.
+
+```json
+{
+  "expo": {
+    "ios": {
+      "bundleIdentifier": "com.example.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
+    },
+    "android": {
+      "package": "com.example.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [["react-native-oauth-essentials", { "google": true }]]
+  }
+}
+```
+
+- `ios.googleServicesFile`: `CLIENT_ID` is the iOS client id.
+- `android.googleServicesFile` (`google-services.json`): the web client id is the OAuth client with `client_type` 3,
+  and the iOS client id (when the plist does not give one) is the `client_type` 2 client whose `ios_info.bundle_id`
+  matches `ios.bundleIdentifier`.
+
+When Google is enabled as a sign-in provider in Firebase Authentication (and the SHA-1 is added to the Firebase
+Android app), Firebase creates the web, Android and iOS OAuth clients itself; download the config files again after
+that so they contain the ids.
 
 ### `appleSignIn`
 
@@ -79,9 +114,22 @@ Adds `webcredentials:` Associated Domains, needed by [passkeys](./usage/passkey.
 
 ## Android
 
-Nothing to configure in the plugin:
-
-- Google uses the web client id passed in code; the Android client id only has to exist in Google Cloud with your
-  package name and SHA-1 fingerprints.
+- Google needs the web client id, written by the `google` option as manifest meta-data (or passed in code). The
+  Android client id is never used directly: it only has to exist in Google Cloud with your package name and SHA-1
+  fingerprints.
 - The library manifest already registers the `CustomTabsActivity` that handles `OAUTH_REDIRECT_URI`
   (`<applicationId>://oauth/callback`).
+
+## Why it does not run in Expo Go
+
+Expo Go is a prebuilt app from the stores that only contains the native modules of the Expo SDK. Your JavaScript is
+loaded into it, but native code (the library's Swift and Kotlin, the GoogleSignIn SDK) cannot be added at runtime, and
+its URL schemes, entitlements and bundle id belong to Expo Go, not to your app. Use a development build
+(`npx expo run:ios` / `npx expo run:android` or `eas build --profile development`).
+
+In Expo Go, importing the library throws:
+
+```
+react-native-oauth-essentials does not work in Expo Go, which only contains the Expo SDK native code. Create a
+development build instead: `npx expo run:ios` / `npx expo run:android` or `eas build --profile development`.
+```

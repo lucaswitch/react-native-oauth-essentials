@@ -5,7 +5,7 @@ sidebar_position: 2.8
 # Testing with Jest
 
 The library is a TurboModule, so importing it in Jest without a native module fails with a
-`TurboModuleRegistry.getEnforcing(...)` error. Use the mock shipped at `react-native-oauth-essentials/jest`.
+`native module "OauthEssentials" was not found` error. Use the mock shipped at `react-native-oauth-essentials/jest`.
 
 ## Setup
 

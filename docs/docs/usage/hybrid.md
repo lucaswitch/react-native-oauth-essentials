@@ -15,7 +15,8 @@ desired authentication flow.
 
 > ⚠️ **Important:**
 > - Users **cannot choose** the platform methods - the OS presents available credentials
-> - **Android:** Google ID must be configured (`webClientId`). **iOS:** the client id is ignored, Google is not offered
+> - **Android:** Google ID must be configured (`webClientId`, passed or in the app config). **iOS:** the client id is
+>   ignored, Google is not offered
 > - Always handle the `CANCELLED` case - users may dismiss the credential picker
 
 We **highly recommend** using hybrid sign-in as the **default** for unauthenticated users, while still providing
@@ -34,22 +35,24 @@ alternative sign-in options to cover all cases.
 - Offers: Google ID (`GetGoogleIdOption`) and saved passwords. **Apple ID is not included** (use `appleSignIn()`)
 - Uses Credential Manager to aggregate the options in one bottom sheet
 - Requires Google Play Services: rejects with `NOT_SUPPORTED_ERROR` without them (`HYBRID_SUPPORTED` is `false` then)
-- Uses `webClientId`; rejects with `CONFIGURATION_ERROR` without it
+- Uses `webClientId`, or the web client id from the app config (manifest meta-data or Firebase); rejects with
+  `CONFIGURATION_ERROR` without any
 - `authorizedAccounts`, `autoSelectEnabled` and `nonce` are used; `mode`, `hint`, `scopes`, `offlineAccess`,
   `hostedDomain` and `serverClientId` are ignored (with a warning in development)
 
 ## Methods
 
-### `hybridSignIn(clientId: GoogleClientId, options?: GoogleSignInOptions)`
+### `hybridSignIn(clientId?: GoogleClientId | null, options?: GoogleSignInOptions)`
 
-Performs all available sign-in methods on the platform at once.
+Performs all available sign-in methods on the platform at once. Also callable as `hybridSignIn()` and
+`hybridSignIn(options)` when the web client id is in the app config.
 This is typically used on app startup to retrieve any existing sign-in credentials.
 
 #### Parameters
 
 | Name       | Type                             | Description                                                                                             |
 |------------|----------------------------------|---------------------------------------------------------------------------------------------------------|
-| `clientId` | `GoogleClientId`                 | Same as `googleSignIn`: `{ iosClientId, webClientId }` or a string. Android uses `webClientId`; ignored on iOS. See [Google client ids](../methods#google-client-ids). |
+| `clientId` | `GoogleClientId` (optional)      | Same as `googleSignIn`: `{ iosClientId, webClientId }` or a string, or omitted to read it from the app config. Android uses `webClientId`; ignored on iOS. See [Google client ids](../methods#google-client-ids). |
 | `options`  | `GoogleSignInOptions` (optional) | Optional configuration for Google Sign-In. See [GoogleSignInOptions](#googlesigninoptions) for details. |
 
 #### GoogleSignInOptions

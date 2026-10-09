@@ -109,21 +109,25 @@ import {
 
 ### Google
 
-#### `googleSignIn(clientId, options?)`
+#### `googleSignIn(clientId?, options?)`
 
-Shows the Google sign in UI. `clientId` is `{ iosClientId?, webClientId? }` (all from the same Google Cloud project):
+Shows the Google sign in UI. Also `googleSignIn()` / `googleSignIn(options)`: the client id is optional and, when it is
+omitted, read from the app config:
 
-- iOS uses `iosClientId` (or `GIDClientID` from Info.plist) and `webClientId` as the default `serverClientId` (idToken
-  audience and `serverAuthCode`; falls back to `GIDServerClientID`). iOS also needs the reversed iOS client id as a URL
-  scheme in `Info.plist` (`1234-abcd.apps.googleusercontent.com` becomes `com.googleusercontent.apps.1234-abcd`):
-  without it the call rejects with `CONFIGURATION_ERROR`, whose message has the exact scheme to add.
-- Android uses `webClientId` (missing rejects with `CONFIGURATION_ERROR`). The Android client id is never passed.
-- A string still works and is used as is: the iOS client id on iOS, the web client id on Android.
+- iOS: `GIDClientID` in Info.plist, then `CLIENT_ID` of the Firebase `GoogleService-Info.plist`. The `serverClientId`
+  (idToken audience and `serverAuthCode`) falls back to `webClientId`, then `GIDServerClientID`. iOS also needs the
+  reversed iOS client id as a URL scheme in `Info.plist` (`1234-abcd.apps.googleusercontent.com` becomes
+  `com.googleusercontent.apps.1234-abcd`): without it the call rejects with `CONFIGURATION_ERROR`, whose message has the
+  exact scheme to add.
+- Android: the web client id from the `com.oauthessentials.GOOGLE_WEB_CLIENT_ID` `<meta-data>` of AndroidManifest.xml,
+  then the Firebase `default_web_client_id` string (from `google-services.json`). The Android client id is never passed.
+- None found: rejects with `CONFIGURATION_ERROR`. The [Expo config plugin](#expo) writes all of it.
+
+`clientId` can also be passed as `{ iosClientId?, webClientId? }` (all from the same Google Cloud project; a passed id
+wins over the config), or as a string used as is (the iOS client id on iOS, the web client id on Android).
 
 ```typescript
-const GOOGLE_CLIENT_IDS = { iosClientId: IOS_CLIENT_ID, webClientId: WEB_CLIENT_ID };
-
-const result = await googleSignIn(GOOGLE_CLIENT_IDS, {
+const result = await googleSignIn({ // or googleSignIn({ iosClientId, webClientId }, { ... })
   mode: 'button', // Android: full "Sign in with Google" flow (use it for button taps)
   nonce,          // embedded in the idToken
   scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
@@ -136,14 +140,14 @@ if (result.type === CredentialsType.GOOGLE_ID) {
 
 **Returns:** `Promise<GoogleIdCredentialResult | CancelledCredentialResult>`
 
-#### `googleSilentSignIn(clientId, options?)`
+#### `googleSilentSignIn(clientId?, options?)`
 
 Restores a previous Google sign in, without UI on iOS (and on Android when a single account signed in before). Rejects
 with `NO_SIGN_IN_AVAILABLE` when there is nothing to restore.
 
 ```typescript
 try {
-  const result = await googleSilentSignIn(GOOGLE_CLIENT_IDS);
+  const result = await googleSilentSignIn();
 } catch (e) {
   if (isCredentialError(e, CredentialError.NO_SIGN_IN_AVAILABLE)) showSignInScreen();
 }
@@ -211,13 +215,13 @@ when saved. iOS resolves `false` without doing anything: use `textContentType` o
 
 ### Hybrid
 
-#### `hybridSignIn(clientId, options?)`
+#### `hybridSignIn(clientId?, options?)`
 
 One picker with the credentials the user already has, meant for app start. iOS offers Apple ID + saved passwords (the
-Google client id is ignored); Android offers Google + saved passwords (uses `webClientId`).
+Google client id is ignored); Android offers Google + saved passwords (uses `webClientId`, or the one in the app config).
 
 ```typescript
-const result = await hybridSignIn(GOOGLE_CLIENT_IDS, { authorizedAccounts: true });
+const result = await hybridSignIn({ authorizedAccounts: true });
 if (result.type === CredentialsType.CANCELLED) showSignInScreen();
 ```
 
@@ -387,7 +391,7 @@ type CancelledCredentialResult = { type: CredentialsType.CANCELLED; data: null }
 
 | `CredentialError` | When |
 |---|---|
-| `CONFIGURATION_ERROR` | Setup bug: no Google client id, iOS URL scheme missing from Info.plist (`message` has the exact scheme), invalid `redirectUri` |
+| `CONFIGURATION_ERROR` | Setup bug: no Google client id (passed or in the app config), iOS URL scheme missing from Info.plist (`message` has the exact scheme), invalid `redirectUri` |
 | `NOT_SUPPORTED_ERROR` | No Play Services (Android), passkeys on old OS, `getAppleIdCredentialState` on Android |
 | `NO_ACTIVITY_ERROR` | No activity / view controller to present the UI |
 | `NO_SIGN_IN_AVAILABLE` | Nothing to return: no previous sign in, account or passkey |
@@ -401,7 +405,7 @@ type CancelledCredentialResult = { type: CredentialsType.CANCELLED; data: null }
 
 ```typescript
 try {
-  await googleSignIn(GOOGLE_CLIENT_IDS);
+  await googleSignIn();
 } catch (e) {
   if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) console.error(e.message);
   else if (isCredentialError(e, CredentialError.BROWSER_UNAVAILABLE)) showRetryMessage();
@@ -412,8 +416,9 @@ try {
 
 ## Expo
 
-Not supported in Expo Go; use a development build (`npx expo prebuild` / `npx expo run:ios`). The config plugin writes
-the iOS native config (Android needs nothing):
+Not supported in Expo Go (it only contains the Expo SDK native code; importing the library there throws an error saying
+so): use a development build (`npx expo run:ios` / `npx expo run:android` or `eas build --profile development`). The
+config plugin writes the native config:
 
 ```json
 {
@@ -429,15 +434,22 @@ the iOS native config (Android needs nothing):
 }
 ```
 
-- `google`: adds the reversed iOS client id URL scheme and `GIDClientID` / `GIDServerClientID` to Info.plist.
+- `google`: `{ iosClientId?, webClientId? }` or `true`. Missing ids are read from the Firebase files set in
+  `ios.googleServicesFile` / `android.googleServicesFile`. iOS: the reversed iOS client id URL scheme and `GIDClientID` /
+  `GIDServerClientID` in Info.plist. Android: the `com.oauthessentials.GOOGLE_WEB_CLIENT_ID` meta-data. Then call
+  `googleSignIn()` without client ids.
 - `appleSignIn`: adds the Sign in with Apple entitlement.
 - `webCredentialsDomains`: adds `webcredentials:` associated domains (passkeys and saved passwords).
+
+If the native module is missing outside Expo Go, rebuild the app after installing (`pod install` + native build;
+reloading Metro is not enough) with the New Architecture enabled.
 
 [Expo docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/expo)
 
 ## Testing (Jest)
 
-Importing the library in Jest fails with a `TurboModuleRegistry.getEnforcing` error unless you use the bundled mock:
+Importing the library in Jest fails with a `native module "OauthEssentials" was not found` error unless you use the
+bundled mock:
 
 ```js
 // jest.setup.js (referenced by "setupFiles" in the Jest config)

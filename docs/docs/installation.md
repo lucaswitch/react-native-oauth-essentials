@@ -27,8 +27,8 @@ pod install; or // bundle exec pod install
 
 ## Expo
 
-Expo Go is not supported. Use a development build and the config plugin, which writes the iOS native config described
-below: see [Expo](./expo.md).
+Expo Go is not supported. Use a development build and the config plugin, which writes the native config described
+below (from the client ids or the Firebase files): see [Expo](./expo.md).
 
 ## Configuration
 
@@ -70,11 +70,24 @@ If you already have the credentials in hand you can skip this step.
 | **Android** | Package name (`applicationId`) + SHA-1 of **every** signing key: debug, release and the Play App Signing key | Never passed in code. Google only checks that it exists for your package and signature |
 | **iOS** | Bundle id | `iosClientId` |
 
-Pass them as an object; each platform picks the one it needs:
+:::tip Using Firebase?
+Enable Google as a sign-in provider in Firebase Authentication and add your SHA-1 fingerprints to the Firebase Android
+app: Firebase creates the three OAuth clients for you, and its `GoogleService-Info.plist` / `google-services.json`
+contain the ids.
+:::
+
+Put the ids in the native config (see [iOS Setup](#ios-setup) and [Android Setup](#android-setup)) and call the
+methods without client ids:
 
 ```ts
 import { googleSignIn } from 'react-native-oauth-essentials';
 
+const result = await googleSignIn({ mode: 'button' }); // or googleSignIn()
+```
+
+Or pass them as an object (a passed id wins over the config); each platform picks the one it needs:
+
+```ts
 const GOOGLE_CLIENT_IDS = {
   iosClientId: '1234-abcd.apps.googleusercontent.com',
   webClientId: '5678-efgh.apps.googleusercontent.com',
@@ -99,23 +112,47 @@ Google Sign-In needs the **reversed iOS client id** as a URL scheme: the client 
         </array>
     </dict>
 </array>
-<!-- Optional: lets you omit iosClientId / webClientId in code on iOS -->
+<!-- Lets you call googleSignIn() without iosClientId / webClientId on iOS -->
 <key>GIDClientID</key>
 <string>1234-abcd.apps.googleusercontent.com</string>
 <key>GIDServerClientID</key>
 <string>5678-efgh.apps.googleusercontent.com</string>
 ```
 
-When the scheme is missing, `googleSignIn` and `googleSilentSignIn` reject with `CONFIGURATION_ERROR` and the error
-`message` contains the exact scheme to add (instead of crashing the app). With Expo, the plugin's `google` option adds
-the scheme and both keys.
+When no client id is passed, iOS reads `GIDClientID`, then `CLIENT_ID` of the Firebase `GoogleService-Info.plist` if
+it is in the app target; the `serverClientId` falls back to `webClientId`, then `GIDServerClientID`. The URL scheme is
+always required (with Firebase it is `REVERSED_CLIENT_ID` of `GoogleService-Info.plist`).
+
+When the scheme or the client id is missing, `googleSignIn` and `googleSilentSignIn` reject with `CONFIGURATION_ERROR`
+and the error `message` says what to add (instead of crashing the app). With Expo, the plugin's `google` option adds the
+scheme and both keys.
 
 ### Android Setup
 
-Nothing to add to the native project: the library manifest already registers its activities. Make sure the Android
-client id exists with your package name and the SHA-1 of every signing key (`cd android && ./gradlew signingReport`).
+The library manifest already registers its activities. To call `googleSignIn()` without client ids, add the **web**
+client id inside `<application>` of `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<meta-data
+    android:name="com.oauthessentials.GOOGLE_WEB_CLIENT_ID"
+    android:value="5678-efgh.apps.googleusercontent.com" />
+```
+
+Without it, the library uses the `default_web_client_id` string that the Firebase `google-services` Gradle plugin
+generates from `google-services.json`. With neither (and no `webClientId` passed), the call rejects with
+`CONFIGURATION_ERROR`. With Expo, the plugin's `google` option writes the meta-data.
+
+Make sure the Android client id exists with your package name and the SHA-1 of every signing key
+(`cd android && ./gradlew signingReport`).
 
 There you go, you're ready to use it!
+
+## Troubleshooting
+
+If importing the library throws `the native module "OauthEssentials" was not found`, the app binary does not contain it:
+rebuild after installing (`pod install` in `ios/`, then build again; reloading Metro is not enough) and make sure the New
+Architecture is enabled. In Expo Go, the error says the library does not work there: use a
+[development build](./expo.md#why-it-does-not-run-in-expo-go).
 
 ## Testing
 
