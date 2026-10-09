@@ -12,7 +12,7 @@ resolves, what it rejects with and which events it emits.
 - **Cancellation resolves.** When the user dismisses the UI, methods resolve `{ type: 'CANCELLED', data: null }`
   instead of rejecting (exceptions are noted per method).
 - **Errors reject** with an `Error` that has a `code` from [`CredentialError`](./types#credentialerror) and the native
-  error text in `message`. Every rejection of the library has a `code`; narrow it with
+  error text in `message`. Every code, its causes and an errors-by-method table are in [Errors](./errors). Every rejection of the library has a `code`; narrow it with
   [`isCredentialError`](#iscredentialerrorerror-code).
 - **Events.** Credential methods also report their result through `addCredentialSuccessListener` /
   `addCredentialFailureListener` (see [Events](#events)).
@@ -84,7 +84,8 @@ Shows the Google sign in UI and resolves with the signed in account.
 2. Configures GoogleSignIn with the iOS client id, plus `serverClientId` and `hostedDomain`.
 3. Rejects with `BROWSER_UNAVAILABLE` if Guided Access is on.
 4. If the app is not active, waits up to 2 seconds for it to become active, then rejects with `BROWSER_UNAVAILABLE`.
-5. Finds the top most view controller attached to a window (rejects with `NO_ACTIVITY_ERROR` when there is none).
+5. Finds the top most view controller attached to a window (rejects with `NO_ACTIVITY_ERROR` when there is none) and
+   rejects with `BROWSER_UNAVAILABLE` when its window is not in the foreground (e.g. Control Center is open).
 6. Calls `GIDSignIn.signIn(withPresenting:hint:additionalScopes:nonce:)`, which opens an `ASWebAuthenticationSession`.
    "Unable to open Safari." errors are reported as `BROWSER_UNAVAILABLE`.
 
@@ -336,7 +337,8 @@ Signs in with any OAuth 2.0 / OpenID Connect provider using the authorization co
    base64url).
 2. Builds `authorizationEndpoint?response_type=code&client_id=…&redirect_uri=…&state=…`, plus `scope` (space separated)
    and `code_challenge` + `code_challenge_method=S256` when `usePKCE` is not `false`. `additionalParameters` are added
-   last and override these.
+   last and may override `scope`; `response_type`, `client_id`, `redirect_uri`, `state`, `code_challenge` and
+   `code_challenge_method` are ignored there (with a warning in development), since the library checks or reuses them.
 3. Opens it in `ASWebAuthenticationSession` on iOS, with the `redirectUri` scheme as callback and
    `prefersEphemeralSession`. On Android it opens a Custom Tab (http/https urls only), where the redirect must reach the
    library's `CustomTabsActivity`: use `OAUTH_REDIRECT_URI` or add an intent filter for your uri.
@@ -356,9 +358,10 @@ Rejects with:
   its `error_description`/`error`) or a non JSON response.
 - `NETWORK_ERROR`: the token request failed (offline, DNS, TLS...).
 - `CONFIGURATION_ERROR`: `redirectUri` has no scheme.
-- `BROWSER_UNAVAILABLE`: iOS Guided Access, app not active within 2 seconds, or the session could not start; Android
-  with no browser installed.
-- `NO_ACTIVITY_ERROR` (Android) and `SIMULTANEOUS_CALL_ERROR` (iOS).
+- `BROWSER_UNAVAILABLE`: iOS Guided Access, app not active within 2 seconds, its window not in the foreground, or the
+  session could not start; Android with no browser installed.
+- `NO_ACTIVITY_ERROR` (no activity on Android, no view controller in a window on iOS) and `SIMULTANEOUS_CALL_ERROR`
+  (iOS).
 
 Does not emit events, not even for rejections. See
 [OAuth Sign-In](./usage/oauth).

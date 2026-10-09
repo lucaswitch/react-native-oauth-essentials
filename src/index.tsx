@@ -59,8 +59,8 @@ const APPLE_ID_CACHED_RESULTS = new Map<
  * Rejects with `CONFIGURATION_ERROR` (no client id; iOS: the reversed client id URL scheme is not in
  * Info.plist, the message has the exact scheme), `NOT_SUPPORTED_ERROR` (Android, no Play Services),
  * `NO_ACTIVITY_ERROR`,
- * `NO_SIGN_IN_AVAILABLE` (Android), `BROWSER_UNAVAILABLE` (iOS: app not active, Guided Access or
- * Safari could not be opened), `SIMULTANEOUS_CALL_ERROR` (iOS: a Google sign in is pending) or
+ * `NO_SIGN_IN_AVAILABLE` (Android), `BROWSER_UNAVAILABLE` (iOS: app not active, its window not in
+ * the foreground, Guided Access or Safari could not be opened), `SIMULTANEOUS_CALL_ERROR` (iOS: a Google sign in is pending) or
  * `INVALID_RESULT_ERROR`.
  * Emits `onCredentialSuccess` / `onCredentialFailure`.
  *
@@ -368,7 +368,8 @@ export async function hybridSignIn(
   )) as HybridSignInResult;
 }
 
-type HybridSignInResult =
+/** Result of {@link hybridSignIn}: Apple ID only on iOS, Google ID only on Android. */
+export type HybridSignInResult =
   | AppleIdCredentialResult
   | GoogleIdCredentialResult
   | PasswordCredentialResult
@@ -463,7 +464,8 @@ export async function cancelPassKeyAutoFill(): Promise<boolean> {
  *
  * 1. Generates a random `state` and a PKCE S256 verifier/challenge on the native side.
  * 2. Builds `authorizationEndpoint?response_type=code&client_id&redirect_uri&state[&scope]
- *    [&code_challenge&code_challenge_method=S256]` + `additionalParameters` (which override them).
+ *    [&code_challenge&code_challenge_method=S256]` + `additionalParameters` (which may override
+ *    `scope`; the other parameters above are reserved and ignored there, with a dev warning).
  * 3. Opens it in `ASWebAuthenticationSession` (iOS, `prefersEphemeralSession`, waits up to 2 seconds
  *    for the app to be active) or a Custom Tab (Android) and waits for the redirect to `redirectUri`.
  *    On Android the redirect must reach `CustomTabsActivity`: use `OAUTH_REDIRECT_URI` or add an
@@ -477,8 +479,8 @@ export async function cancelPassKeyAutoFill(): Promise<boolean> {
  * `error=access_denied` or (Android) another browser session starts.
  * Rejects with `INVALID_RESULT_ERROR` (state mismatch, provider error, no code, token endpoint
  * returned non 2xx or non JSON), `NETWORK_ERROR` (token request failed), `CONFIGURATION_ERROR`
- * (invalid `redirectUri`), `BROWSER_UNAVAILABLE`, `NO_ACTIVITY_ERROR` (Android) or
- * `SIMULTANEOUS_CALL_ERROR` (iOS).
+ * (invalid `redirectUri`), `BROWSER_UNAVAILABLE` (iOS: Guided Access, app not active or its window
+ * not in the foreground; Android: no browser), `NO_ACTIVITY_ERROR` or `SIMULTANEOUS_CALL_ERROR` (iOS).
  * Does not emit events.
  */
 export async function oauthSignIn(
