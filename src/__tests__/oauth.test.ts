@@ -37,6 +37,33 @@ describe('buildAuthorizationUrl', () => {
     ).toBe(true);
     expect(url).not.toContain('code_challenge');
   });
+
+  it('ignores reserved additionalParameters and allows scope', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const url = buildAuthorizationUrl({
+      authorizationEndpoint: 'https://auth.example.com/authorize',
+      clientId: 'c',
+      redirectUri: 'app://cb',
+      scopes: ['openid'],
+      state: 's',
+      codeChallenge: 'x',
+      additionalParameters: {
+        state: 'mine',
+        redirect_uri: 'other://cb',
+        code_challenge: 'y',
+        scope: 'openid email',
+      },
+    });
+    expect(url).toContain('&state=s&');
+    expect(url).toContain('redirect_uri=app%3A%2F%2Fcb');
+    expect(url).toContain('code_challenge=x&');
+    expect(url).toContain('scope=openid%20email');
+    expect(url).not.toContain('mine');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('additionalParameters.state is ignored')
+    );
+    warn.mockRestore();
+  });
 });
 
 describe('parseRedirectParams', () => {
@@ -44,6 +71,14 @@ describe('parseRedirectParams', () => {
     expect(
       parseRedirectParams('app://cb?code=a%2Fb&state=s+1#id_token=t&flag')
     ).toEqual({ code: 'a/b', state: 's 1', id_token: 't', flag: '' });
+  });
+
+  it('keeps malformed percent-encoding raw instead of throwing', () => {
+    expect(
+      parseRedirectParams(
+        'app://cb?error=access_denied&error_description=50%off+now'
+      )
+    ).toEqual({ error: 'access_denied', error_description: '50%off now' });
   });
 
   it('returns an empty object without parameters', () => {

@@ -117,6 +117,12 @@ export type OAuthSignInOptions = {
    */
   redirectUri?: string;
   scopes?: string[];
+  /**
+   * Extra authorization request parameters (e.g. `prompt`, `login_hint`, `nonce`). They may
+   * override `scope`, but `response_type`, `client_id`, `redirect_uri`, `state`, `code_challenge`
+   * and `code_challenge_method` are set by the library and ignored here (with a warning in
+   * development).
+   */
   additionalParameters?: Record<string, string>;
   /**
    * When set, the authorization code is exchanged for tokens on the device.

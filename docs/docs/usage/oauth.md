@@ -28,7 +28,7 @@ your own server...) using the authorization code flow with PKCE, in a secure bro
 | `clientId` | `string` | Your OAuth client id |
 | `redirectUri` | `string?` | Defaults to `OAUTH_REDIRECT_URI` |
 | `scopes` | `string[]?` | Requested scopes |
-| `additionalParameters` | `Record<string, string>?` | Extra authorization parameters, like `prompt` |
+| `additionalParameters` | `Record<string, string>?` | Extra authorization parameters, like `prompt`. May override `scope`; `state`, `redirect_uri`, `code_challenge` and the other parameters set by the library are ignored |
 | `tokenEndpoint` | `string?` | Exchanges the code for tokens on the device |
 | `usePKCE` | `boolean?` | Defaults to `true` |
 | `prefersEphemeralSession` | `boolean?` | iOS only |

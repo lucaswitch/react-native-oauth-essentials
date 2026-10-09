@@ -41,10 +41,9 @@ describe('Expo plugin', () => {
     ).toHaveLength(1);
   });
 
-  it('requires iosClientId', () => {
-    expect(() => setGoogleInfoPlist({}, { webClientId: 'web-id' })).toThrow(
-      /iosClientId/
-    );
+  it('leaves Info.plist unchanged without iosClientId', () => {
+    const input = { CFBundleURLTypes: [{ CFBundleURLSchemes: ['myapp'] }] };
+    expect(setGoogleInfoPlist(input, { webClientId: 'web-id' })).toBe(input);
   });
 
   it('reads CLIENT_ID from GoogleService-Info.plist', () => {

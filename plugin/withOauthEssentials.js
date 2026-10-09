@@ -130,16 +130,13 @@ function loadGoogleIds(config, google, projectRoot) {
   );
 }
 
+/**
+ * Leaves Info.plist unchanged without an iOS client id (Google may be used on Android only).
+ */
 function setGoogleInfoPlist(infoPlist, google) {
-  if (!google) {
-    return infoPlist;
-  }
-  const iosClientId = nonEmpty(google.iosClientId);
+  const iosClientId = google && nonEmpty(google.iosClientId);
   if (!iosClientId) {
-    throw new Error(
-      `${PLUGIN_NAME}: no Google iOS client id. Set "google": { "iosClientId": "..." } in the plugin ` +
-        'options, or "ios.googleServicesFile" to a Firebase GoogleService-Info.plist'
-    );
+    return infoPlist;
   }
   const scheme = googleUrlScheme(iosClientId);
   const urlTypes = Array.isArray(infoPlist.CFBundleURLTypes)
@@ -234,6 +231,15 @@ function withOauthEssentials(config, options = {}) {
         options.google,
         mod.modRequest.projectRoot
       );
+      if (!ids.iosClientId) {
+        WarningAggregator.addWarningIOS(
+          PLUGIN_NAME,
+          'no Google iOS client id, so Info.plist is not changed and googleSignIn() rejects with ' +
+            'CONFIGURATION_ERROR on iOS. Set "google": { "iosClientId": "..." } or ' +
+            '"ios.googleServicesFile" (ignore this if you only use Google on Android).'
+        );
+        return mod;
+      }
       if (!ids.webClientId) {
         WarningAggregator.addWarningIOS(
           PLUGIN_NAME,

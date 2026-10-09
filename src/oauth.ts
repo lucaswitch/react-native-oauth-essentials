@@ -1,4 +1,5 @@
 import { createCredentialError } from './errors';
+import { warnOnce } from './platform';
 import { CredentialError } from './types';
 
 export type PkcePair = {
@@ -25,9 +26,31 @@ function encodeQuery(params: Record<string, string>): string {
     .join('&');
 }
 
+/**
+ * Decodes a query component, keeping it raw when its percent-encoding is malformed (`50%off`), so
+ * a provider bug does not turn into an error without `code`.
+ */
 function decodeComponent(value: string): string {
-  return decodeURIComponent(value.replace(/\+/g, ' '));
+  const spaced = value.replace(/\+/g, ' ');
+  try {
+    return decodeURIComponent(spaced);
+  } catch {
+    return spaced;
+  }
 }
+
+/**
+ * Set by the library and checked or reused later (state, PKCE, token exchange), so
+ * `additionalParameters` cannot override them.
+ */
+export const RESERVED_AUTHORIZATION_PARAMS = [
+  'response_type',
+  'client_id',
+  'redirect_uri',
+  'state',
+  'code_challenge',
+  'code_challenge_method',
+] as const;
 
 export function buildAuthorizationUrl(p: AuthorizationUrlParams): string {
   const params: Record<string, string> = {
@@ -43,7 +66,18 @@ export function buildAuthorizationUrl(p: AuthorizationUrlParams): string {
     params.code_challenge = p.codeChallenge;
     params.code_challenge_method = 'S256';
   }
-  Object.assign(params, p.additionalParameters ?? {});
+  const reserved: readonly string[] = RESERVED_AUTHORIZATION_PARAMS;
+  for (const [key, value] of Object.entries(p.additionalParameters ?? {})) {
+    if (reserved.includes(key)) {
+      warnOnce(
+        'oauthSignIn',
+        `additionalParameters.${key}`,
+        `additionalParameters.${key} is ignored: the library sets it (use the matching option instead).`
+      );
+      continue;
+    }
+    params[key] = value;
+  }
 
   const separator = p.authorizationEndpoint.includes('?') ? '&' : '?';
   return `${p.authorizationEndpoint}${separator}${encodeQuery(params)}`;

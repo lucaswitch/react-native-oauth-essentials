@@ -54,9 +54,10 @@ All options are optional.
 The client ids come from the plugin options or, when missing, from the [Firebase config files](#using-firebase-config-files)
 set in the Expo config. Ids passed to the plugin win over the files.
 
-- **iOS client id**: required (prebuild fails with a clear error when none is found). The URL scheme is the client id
-  split by `.`, reversed and joined: `1234-abcd.apps.googleusercontent.com` becomes
-  `com.googleusercontent.apps.1234-abcd`. Without it, Google Sign-In rejects with `CONFIGURATION_ERROR`.
+- **iOS client id**: written with its URL scheme, which is the client id split by `.`, reversed and joined:
+  `1234-abcd.apps.googleusercontent.com` becomes `com.googleusercontent.apps.1234-abcd`. When none is found,
+  prebuild only warns and leaves Info.plist unchanged (fine if you use Google on Android only), and Google Sign-In
+  on iOS rejects with `CONFIGURATION_ERROR` unless you pass `{ iosClientId }` in code.
 - **Web client id**: prebuild only warns when none is found. Android sign in then rejects with `CONFIGURATION_ERROR`
   (unless you pass `{ webClientId }` in code), and the iOS idToken audience is the iOS client id.
 
