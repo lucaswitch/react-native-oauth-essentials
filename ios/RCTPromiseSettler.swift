@@ -42,6 +42,47 @@ public class RCTPromiseSettler: NSObject {
     self.reject = nil
     self.emitEvent = nil
   }
+
+  /// ASAuthorizationController failure: a cancellation resolves as CANCELLED, anything else rejects.
+  internal func finish(authorizationError error: Error) {
+    let nsError = error as NSError
+    if nsError.domain == ASAuthorizationError.errorDomain,
+       nsError.code == ASAuthorizationError.canceled.rawValue {
+      succeed(CredentialFactory.fromCancelled())
+    } else {
+      fail(.invalidResult, error.localizedDescription, error)
+    }
+  }
+
+  /// Checks what ASWebAuthenticationSession (also used by GoogleSignIn) needs to start: no Guided
+  /// Access, the app active (waiting up to `browserActiveTimeout`) and a view controller in a
+  /// foreground active scene. A failed start is then reported as BROWSER_UNAVAILABLE without relying
+  /// on the error the session returns. Calls `open` with that view controller, or fails.
+  internal func whenBrowserCanOpen(_ name: String, _ open: @escaping (UIViewController) -> Void) {
+    if UIAccessibility.isGuidedAccessEnabled {
+      fail(.browserUnavailable, "\(name) cannot open the browser while Guided Access is enabled")
+      return
+    }
+
+    PresentationContext.whenActive(timeout: Self.browserActiveTimeout) { active in
+      guard active else {
+        self.fail(.browserUnavailable, "\(name) requires the app to be active")
+        return
+      }
+      guard let presenter = PresentationContext.topViewController() else {
+        self.fail(.noActivity, "No view controller available to present \(name)")
+        return
+      }
+      guard presenter.view.window?.windowScene?.activationState == .foregroundActive else {
+        self.fail(.browserUnavailable, "\(name) cannot open the browser: the app window is not in the foreground")
+        return
+      }
+      open(presenter)
+    }
+  }
+
+  /// How long to wait for the app to become active before giving up on opening the browser.
+  private static let browserActiveTimeout: TimeInterval = 2
 }
 
 /// Finds where to present the sign in UI. Must be called on the main thread.

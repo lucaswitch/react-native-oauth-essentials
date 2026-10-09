@@ -55,12 +55,12 @@ class CredentialFactory {
     @available(iOS 16.0, *)
     public static func fromPasskeyRegistration(credential: ASAuthorizationPlatformPublicKeyCredentialRegistration) -> [String: Any] {
         let responseJson: [String: Any] = [
-          "id": base64URLEncode(credential.credentialID),
-          "rawId": base64URLEncode(credential.credentialID),
+          "id": credential.credentialID.base64URLEncodedString(),
+          "rawId": credential.credentialID.base64URLEncodedString(),
           "type": "public-key",
           "response": [
-            "clientDataJSON": base64URLEncode(credential.rawClientDataJSON),
-            "attestationObject": base64URLEncode(credential.rawAttestationObject ?? Data())
+            "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+            "attestationObject": (credential.rawAttestationObject ?? Data()).base64URLEncodedString()
           ]
         ]
 
@@ -81,14 +81,14 @@ class CredentialFactory {
     @available(iOS 16.0, *)
     public static func fromPasskeyAssertion(credential: ASAuthorizationPlatformPublicKeyCredentialAssertion) -> [String: Any] {
         let responseJson: [String: Any] = [
-          "id": base64URLEncode(credential.credentialID),
-          "rawId": base64URLEncode(credential.credentialID),
+          "id": credential.credentialID.base64URLEncodedString(),
+          "rawId": credential.credentialID.base64URLEncodedString(),
           "type": "public-key",
           "response": [
-            "clientDataJSON": base64URLEncode(credential.rawClientDataJSON),
-            "authenticatorData": base64URLEncode(credential.rawAuthenticatorData),
-            "signature": base64URLEncode(credential.signature),
-            "userHandle": base64URLEncode(credential.userID)
+            "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+            "authenticatorData": credential.rawAuthenticatorData.base64URLEncodedString(),
+            "signature": credential.signature.base64URLEncodedString(),
+            "userHandle": credential.userID.base64URLEncodedString()
           ]
         ]
 
@@ -104,13 +104,6 @@ class CredentialFactory {
           "type": CredentialsType.passkey.rawValue,
           "data": jsonString
         ]
-    }
-
-    private static func base64URLEncode(_ data: Data) -> String {
-        return data.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
     }
 
     public static func fromGoogleId(user: GIDGoogleUser, serverAuthCode: String?) -> [String: Any] {
@@ -133,5 +126,26 @@ class CredentialFactory {
           "data": data
         ]
         return result
+    }
+}
+
+/// base64url without padding (RFC 4648 §5), used by WebAuthn and PKCE.
+extension Data {
+    func base64URLEncodedString() -> String {
+        return base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    init?(base64URLEncoded string: String) {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64.append(String(repeating: "=", count: 4 - remainder))
+        }
+        self.init(base64Encoded: base64)
     }
 }

@@ -55,12 +55,6 @@ public class AppleIdRetriever: RCTPromiseSettler,
 
   public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
     self.controller = nil
-    let nsError = error as NSError
-    if nsError.domain == ASAuthorizationError.errorDomain,
-       nsError.code == ASAuthorizationError.canceled.rawValue {
-      succeed(CredentialFactory.fromCancelled())
-    } else {
-      fail(.invalidResult, error.localizedDescription, error)
-    }
+    finish(authorizationError: error)
   }
 }

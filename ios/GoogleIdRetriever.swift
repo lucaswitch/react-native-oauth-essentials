@@ -4,9 +4,6 @@ import React
 /// Must be created on the main thread: GIDSignIn presents ASWebAuthenticationSession synchronously.
 public class GoogleIdRetriever: RCTPromiseSettler {
 
-  /// How long to wait for the app to become active before giving up on opening the browser.
-  private static let activeTimeout: TimeInterval = 2
-
   init(
     clientId: String,
     options: NSDictionary,
@@ -17,8 +14,9 @@ public class GoogleIdRetriever: RCTPromiseSettler {
   ) {
     super.init(resolve: resolve, reject: reject, emitEvent: emitEvent)
 
-    // GIDSignIn raises an NSException (crashing the app) for a missing client id or URL scheme,
-    // so both are validated here and reported as CONFIGURATION_ERROR instead.
+    // GIDSignIn raises an NSException (crashing the app) for a missing client id or, in the
+    // interactive flow only, URL scheme, so they are validated here and reported as
+    // CONFIGURATION_ERROR instead.
     guard let clientId = Self.resolveClientId(clientId) else {
       fail(
         .configuration,
@@ -28,7 +26,7 @@ public class GoogleIdRetriever: RCTPromiseSettler {
       return
     }
     let scheme = Self.urlScheme(for: clientId)
-    guard Self.registeredUrlSchemes().contains(scheme) else {
+    guard silent || Self.registeredUrlSchemes().contains(scheme) else {
       fail(
         .configuration,
         "Info.plist is missing the URL scheme \"\(scheme)\" required by Google Sign-In. Add it to "
@@ -54,21 +52,7 @@ public class GoogleIdRetriever: RCTPromiseSettler {
   }
 
   private func performGoogleSignIn(options: NSDictionary) {
-    if UIAccessibility.isGuidedAccessEnabled {
-      fail(.browserUnavailable, "Google Sign-In cannot open the browser while Guided Access is enabled")
-      return
-    }
-
-    PresentationContext.whenActive(timeout: Self.activeTimeout) { active in
-      guard active else {
-        self.fail(.browserUnavailable, "Google Sign-In requires the app to be active")
-        return
-      }
-      guard let presenter = PresentationContext.topViewController() else {
-        self.fail(.noActivity, "No view controller available to present Google Sign-In")
-        return
-      }
-
+    whenBrowserCanOpen("Google Sign-In") { presenter in
       GIDSignIn.sharedInstance.signIn(
         withPresenting: presenter,
         hint: options["hint"] as? String,
@@ -159,8 +143,9 @@ public class GoogleIdRetriever: RCTPromiseSettler {
     return Set(schemes.map { $0.lowercased() })
   }
 
-  /// GIDSignIn reports a failed ASWebAuthenticationSession start as an unknown error that only
-  /// keeps AppAuth's "Unable to open Safari." message (OIDErrorCodeSafariOpenError = -9).
+  /// Fallback for the causes `whenBrowserCanOpen` does not catch. GIDSignIn reports a failed
+  /// ASWebAuthenticationSession start as an unknown error that only keeps AppAuth's (not localized)
+  /// "Unable to open Safari." message (OIDErrorCodeSafariOpenError = -9).
   private static func isBrowserUnavailable(_ error: NSError) -> Bool {
     if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError,
        underlying.domain == "org.openid.appauth.general",

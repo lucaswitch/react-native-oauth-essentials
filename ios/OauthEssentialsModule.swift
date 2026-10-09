@@ -340,18 +340,11 @@ enum Pkce {
     guard SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes) == errSecSuccess else {
       return nil
     }
-    return base64URLEncode(Data(bytes))
+    return Data(bytes).base64URLEncodedString()
   }
 
   static func challenge(for verifier: String) -> String {
-    return base64URLEncode(Data(SHA256.hash(data: Data(verifier.utf8))))
-  }
-
-  private static func base64URLEncode(_ data: Data) -> String {
-    return data.base64EncodedString()
-      .replacingOccurrences(of: "+", with: "-")
-      .replacingOccurrences(of: "/", with: "_")
-      .replacingOccurrences(of: "=", with: "")
+    return Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncodedString()
   }
 }
 
@@ -359,7 +352,6 @@ enum Pkce {
 /// It does not emit events: oauthSignIn finishes the flow in JS.
 public class AuthSessionRetriever: RCTPromiseSettler, ASWebAuthenticationPresentationContextProviding {
 
-  private static let activeTimeout: TimeInterval = 2
   private var session: ASWebAuthenticationSession?
 
   init(
@@ -375,17 +367,7 @@ public class AuthSessionRetriever: RCTPromiseSettler, ASWebAuthenticationPresent
       fail(.invalidResult, "Invalid authorization url or redirect uri")
       return
     }
-    if UIAccessibility.isGuidedAccessEnabled {
-      fail(.browserUnavailable, "The browser cannot be opened while Guided Access is enabled")
-      return
-    }
-
-    PresentationContext.whenActive(timeout: Self.activeTimeout) { active in
-      guard active else {
-        self.fail(.browserUnavailable, "The browser requires the app to be active")
-        return
-      }
-
+    whenBrowserCanOpen("oauthSignIn") { _ in
       let session = ASWebAuthenticationSession(url: authUrl, callbackURLScheme: callbackScheme) { callbackURL, error in
         self.session = nil
         self.handle(callbackURL: callbackURL, error: error)

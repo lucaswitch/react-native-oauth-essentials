@@ -43,13 +43,7 @@ public class PasswordRetriever: RCTPromiseSettler,
     didCompleteWithError error: Error
   ) {
     self.controller = nil
-    let nsError = error as NSError
-    if nsError.domain == ASAuthorizationError.errorDomain,
-       nsError.code == ASAuthorizationError.canceled.rawValue {
-      succeed(CredentialFactory.fromCancelled())
-    } else {
-      fail(.invalidResult, error.localizedDescription, error)
-    }
+    finish(authorizationError: error)
   }
 
   public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {

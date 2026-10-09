@@ -75,7 +75,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
 
   private func buildRegistrationRequest(json: [String: Any]) throws -> ASAuthorizationRequest {
     guard let challengeStr = json["challenge"] as? String,
-          let challenge = base64URLDecode(challengeStr) else {
+          let challenge = Data(base64URLEncoded: challengeStr) else {
       throw NSError(domain: "PasskeyRetriever", code: -1, userInfo: [
         NSLocalizedDescriptionKey: "Missing or invalid challenge"
       ])
@@ -90,7 +90,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
 
     guard let user = json["user"] as? [String: Any],
           let userIdStr = user["id"] as? String,
-          let userId = base64URLDecode(userIdStr),
+          let userId = Data(base64URLEncoded: userIdStr),
           let userName = user["name"] as? String else {
       throw NSError(domain: "PasskeyRetriever", code: -1, userInfo: [
         NSLocalizedDescriptionKey: "Missing or invalid user fields"
@@ -117,7 +117,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
         if #available(iOS 17.4, *) {
             request.excludedCredentials = excludeCredentials.compactMap { cred in
                 guard let idStr = cred["id"] as? String,
-                      let idData = base64URLDecode(idStr) else { return nil }
+                      let idData = Data(base64URLEncoded: idStr) else { return nil }
                 return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: idData)
             }
         } else {
@@ -130,7 +130,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
 
   private func buildAssertionRequest(json: [String: Any]) throws -> ASAuthorizationRequest {
     guard let challengeStr = json["challenge"] as? String,
-          let challenge = base64URLDecode(challengeStr) else {
+          let challenge = Data(base64URLEncoded: challengeStr) else {
       throw NSError(domain: "PasskeyRetriever", code: -1, userInfo: [
         NSLocalizedDescriptionKey: "Missing or invalid challenge"
       ])
@@ -144,7 +144,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
     if let allowCredentials = json["allowCredentials"] as? [[String: Any]] {
       request.allowedCredentials = allowCredentials.compactMap { cred in
         guard let idStr = cred["id"] as? String,
-              let idData = base64URLDecode(idStr) else { return nil }
+              let idData = Data(base64URLEncoded: idStr) else { return nil }
         return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: idData)
       }
     }
@@ -183,13 +183,7 @@ public class PasskeyRetriever: RCTPromiseSettler,
     didCompleteWithError error: Error
   ) {
     self.controller = nil
-    let nsError = error as NSError
-    if nsError.domain == ASAuthorizationError.errorDomain,
-       nsError.code == ASAuthorizationError.canceled.rawValue {
-      succeed(CredentialFactory.fromCancelled())
-    } else {
-      fail(.invalidResult, error.localizedDescription, error)
-    }
+    finish(authorizationError: error)
   }
 
   // MARK: - ASAuthorizationControllerPresentationContextProviding
@@ -199,17 +193,6 @@ public class PasskeyRetriever: RCTPromiseSettler,
   }
 
   // MARK: - Helpers
-
-  private func base64URLDecode(_ string: String) -> Data? {
-    var base64 = string
-      .replacingOccurrences(of: "-", with: "+")
-      .replacingOccurrences(of: "_", with: "/")
-    let remainder = base64.count % 4
-    if remainder > 0 {
-      base64.append(String(repeating: "=", count: 4 - remainder))
-    }
-    return Data(base64Encoded: base64)
-  }
 
   private func mapUserVerification(_ value: String) -> ASAuthorizationPublicKeyCredentialUserVerificationPreference {
     switch value {
