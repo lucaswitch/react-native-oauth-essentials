@@ -28,6 +28,51 @@ export function resolveGoogleClientId<T extends GoogleSignInOptions>(
   return { clientId: ids.webClientId ?? '', options };
 }
 
+/**
+ * Splits the `(clientId?, options?)` arguments of the Google methods, which also accept
+ * `(options)`: an object with `iosClientId` or `webClientId` is the client id, any other object is
+ * the options. Without a client id the native side reads it from the app config (Info.plist,
+ * AndroidManifest meta-data or the Firebase files).
+ */
+export function splitGoogleArgs<T extends object>(
+  first: GoogleClientId | T | null | undefined,
+  second: T | undefined
+): { clientId: GoogleClientId | undefined; options: T | undefined } {
+  if (first === null || first === undefined) {
+    return { clientId: undefined, options: second };
+  }
+  if (
+    typeof first === 'string' ||
+    'iosClientId' in first ||
+    'webClientId' in first
+  ) {
+    return { clientId: first as GoogleClientId, options: second };
+  }
+  return { clientId: undefined, options: first as T };
+}
+
+/**
+ * Message thrown when the native module is not in the binary: Expo Go (which only ships the Expo
+ * SDK native modules) or an app that was not rebuilt after installing the library.
+ */
+export function missingNativeModuleMessage(): string {
+  const expo = (globalThis as { expo?: { modules?: Record<string, unknown> } })
+    .expo;
+  if (expo?.modules?.ExpoGo) {
+    return (
+      'react-native-oauth-essentials does not work in Expo Go, which only contains the Expo SDK ' +
+      'native code. Create a development build instead: `npx expo run:ios` / `npx expo run:android` ' +
+      'or `eas build --profile development`.'
+    );
+  }
+  return (
+    'react-native-oauth-essentials: the native module "OauthEssentials" was not found. Rebuild the ' +
+    'app after installing the library (run `pod install` in ios/ and build again; reloading Metro is ' +
+    'not enough) and make sure the New Architecture is enabled. With Expo, use a development build ' +
+    '(Expo Go is not supported).'
+  );
+}
+
 const warned = new Set<string>();
 
 /**

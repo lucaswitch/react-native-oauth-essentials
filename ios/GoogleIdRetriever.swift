@@ -22,7 +22,8 @@ public class GoogleIdRetriever: RCTPromiseSettler {
     guard let clientId = Self.resolveClientId(clientId) else {
       fail(
         .configuration,
-        "Missing Google iOS client id: pass { iosClientId } or set GIDClientID in Info.plist"
+        "Missing Google iOS client id: pass { iosClientId }, set GIDClientID in Info.plist (the Expo "
+          + "plugin does it) or add the Firebase GoogleService-Info.plist to the app target"
       )
       return
     }
@@ -31,7 +32,8 @@ public class GoogleIdRetriever: RCTPromiseSettler {
       fail(
         .configuration,
         "Info.plist is missing the URL scheme \"\(scheme)\" required by Google Sign-In. Add it to "
-          + "CFBundleURLTypes > CFBundleURLSchemes (or use the Expo config plugin). "
+          + "CFBundleURLTypes > CFBundleURLSchemes (it is REVERSED_CLIENT_ID in GoogleService-Info.plist; "
+          + "the Expo config plugin adds it). "
           + "\(clientId) must be the iOS client id; web client ids go in serverClientId."
       )
       return
@@ -117,18 +119,30 @@ public class GoogleIdRetriever: RCTPromiseSettler {
     succeed(CredentialFactory.fromGoogleId(user: user, serverAuthCode: serverAuthCode))
   }
 
-  /// The client id passed from JS, or GIDClientID from Info.plist when it is empty.
+  /// The client id passed from JS or, when it is empty, GIDClientID from Info.plist, then CLIENT_ID
+  /// from the Firebase GoogleService-Info.plist.
   private static func resolveClientId(_ clientId: String) -> String? {
     let trimmed = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
     if !trimmed.isEmpty {
       return trimmed
     }
-    return infoPlistString("GIDClientID")
+    return infoPlistString("GIDClientID") ?? googleServiceInfoString("CLIENT_ID")
   }
 
   private static func infoPlistString(_ key: String) -> String? {
-    guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
-          !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+    return nonEmpty(Bundle.main.object(forInfoDictionaryKey: key) as? String)
+  }
+
+  private static func googleServiceInfoString(_ key: String) -> String? {
+    guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+          let values = NSDictionary(contentsOfFile: path) else {
+      return nil
+    }
+    return nonEmpty(values[key] as? String)
+  }
+
+  private static func nonEmpty(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
       return nil
     }
     return value

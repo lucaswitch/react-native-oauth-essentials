@@ -1,4 +1,63 @@
-import { resolveGoogleClientId, warnIgnored, warnOnce } from '../platform';
+import {
+  missingNativeModuleMessage,
+  resolveGoogleClientId,
+  splitGoogleArgs,
+  warnIgnored,
+  warnOnce,
+} from '../platform';
+
+describe('splitGoogleArgs', () => {
+  const options = { scopes: ['email'] };
+
+  it('takes a string or client ids object as the client id', () => {
+    expect(splitGoogleArgs('id', options)).toEqual({
+      clientId: 'id',
+      options,
+    });
+    expect(splitGoogleArgs({ webClientId: 'web' }, options)).toEqual({
+      clientId: { webClientId: 'web' },
+      options,
+    });
+    expect(splitGoogleArgs({ iosClientId: undefined }, undefined)).toEqual({
+      clientId: { iosClientId: undefined },
+      options: undefined,
+    });
+  });
+
+  it('takes any other object as the options', () => {
+    expect(splitGoogleArgs(options, undefined)).toEqual({
+      clientId: undefined,
+      options,
+    });
+  });
+
+  it('accepts no client id', () => {
+    expect(splitGoogleArgs(undefined, undefined)).toEqual({
+      clientId: undefined,
+      options: undefined,
+    });
+    expect(splitGoogleArgs(null, options)).toEqual({
+      clientId: undefined,
+      options,
+    });
+  });
+});
+
+describe('missingNativeModuleMessage', () => {
+  const global = globalThis as { expo?: unknown };
+  afterEach(() => {
+    delete global.expo;
+  });
+
+  it('asks for a rebuild', () => {
+    expect(missingNativeModuleMessage()).toMatch(/pod install/);
+  });
+
+  it('explains Expo Go', () => {
+    global.expo = { modules: { ExpoGo: {} } };
+    expect(missingNativeModuleMessage()).toMatch(/does not work in Expo Go/);
+  });
+});
 
 describe('resolveGoogleClientId', () => {
   it('passes a string as is', () => {

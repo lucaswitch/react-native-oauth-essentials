@@ -28,7 +28,12 @@ import {
   type PkcePair,
 } from './oauth';
 import { createCredentialError } from './errors';
-import { resolveGoogleClientId, warnIgnored, warnOnce } from './platform';
+import {
+  resolveGoogleClientId,
+  splitGoogleArgs,
+  warnIgnored,
+  warnOnce,
+} from './platform';
 
 export * from './types';
 export { isCredentialError } from './errors';
@@ -60,13 +65,26 @@ const APPLE_ID_CACHED_RESULTS = new Map<
  * Emits `onCredentialSuccess` / `onCredentialFailure`.
  *
  * @param clientId - `{ iosClientId, webClientId }` (see {@link GoogleClientIds}), or one client id
- * string used as is (the iOS client id on iOS, the web client id on Android).
+ * string used as is (the iOS client id on iOS, the web client id on Android). Optional: without it
+ * the ids are read from the app config (`googleSignIn()` or `googleSignIn(options)`), see
+ * {@link GoogleClientIds}.
  * @param options - See {@link GoogleSignInOptions}.
  */
 export async function googleSignIn(
-  clientId: GoogleClientId,
   options?: GoogleSignInOptions
+): Promise<GoogleIdCredentialResult | CancelledCredentialResult>;
+export async function googleSignIn(
+  clientId: GoogleClientId | null | undefined,
+  options?: GoogleSignInOptions
+): Promise<GoogleIdCredentialResult | CancelledCredentialResult>;
+export async function googleSignIn(
+  clientIdOrOptions?: GoogleClientId | GoogleSignInOptions | null,
+  maybeOptions?: GoogleSignInOptions
 ): Promise<GoogleIdCredentialResult | CancelledCredentialResult> {
+  const { clientId, options } = splitGoogleArgs(
+    clientIdOrOptions,
+    maybeOptions
+  );
   warnIgnored(
     'googleSignIn',
     Platform.OS,
@@ -102,13 +120,24 @@ const GOOGLE_IOS_IGNORED = [
  * Resolves `GOOGLE_ID`, or `CANCELLED` when the user dismisses the Android sheet.
  * Rejects with `NO_SIGN_IN_AVAILABLE` when there is nothing to restore, plus the same errors as
  * {@link googleSignIn} (it shares the iOS simultaneous call lock with it). Takes the same
- * `clientId` as {@link googleSignIn}.
+ * `clientId` as {@link googleSignIn} (also optional).
  * Emits `onCredentialSuccess` / `onCredentialFailure`.
  */
 export async function googleSilentSignIn(
-  clientId: GoogleClientId,
   options?: GoogleSignInOptions
+): Promise<GoogleIdCredentialResult | CancelledCredentialResult>;
+export async function googleSilentSignIn(
+  clientId: GoogleClientId | null | undefined,
+  options?: GoogleSignInOptions
+): Promise<GoogleIdCredentialResult | CancelledCredentialResult>;
+export async function googleSilentSignIn(
+  clientIdOrOptions?: GoogleClientId | GoogleSignInOptions | null,
+  maybeOptions?: GoogleSignInOptions
 ): Promise<GoogleIdCredentialResult | CancelledCredentialResult> {
+  const { clientId, options } = splitGoogleArgs(
+    clientIdOrOptions,
+    maybeOptions
+  );
   warnIgnored(
     'googleSilentSignIn',
     Platform.OS,
@@ -285,18 +314,26 @@ export async function getAppleIdCredentialState(
  * `NO_SIGN_IN_AVAILABLE` or `INVALID_RESULT_ERROR`.
  *
  * Ignored options produce a warning in development.
+ * `clientId` is optional like in {@link googleSignIn}: without it the web client id is read from
+ * the app config.
  *
  * Emits `onCredentialSuccess` / `onCredentialFailure`.
  */
 export async function hybridSignIn(
-  clientId: GoogleClientId,
   options?: HybridSignInOptions
-): Promise<
-  | AppleIdCredentialResult
-  | GoogleIdCredentialResult
-  | PasswordCredentialResult
-  | CancelledCredentialResult
-> {
+): Promise<HybridSignInResult>;
+export async function hybridSignIn(
+  clientId: GoogleClientId | null | undefined,
+  options?: HybridSignInOptions
+): Promise<HybridSignInResult>;
+export async function hybridSignIn(
+  clientIdOrOptions?: GoogleClientId | HybridSignInOptions | null,
+  maybeOptions?: HybridSignInOptions
+): Promise<HybridSignInResult> {
+  const { clientId, options } = splitGoogleArgs(
+    clientIdOrOptions,
+    maybeOptions
+  );
   if (Platform.OS === 'ios') {
     if (clientId) {
       warnOnce(
@@ -328,12 +365,14 @@ export async function hybridSignIn(
   return (await OauthEssentials.hybridSignIn(
     resolved.clientId,
     parseGoogleIdOptions(resolved.options)
-  )) as
-    | AppleIdCredentialResult
-    | GoogleIdCredentialResult
-    | PasswordCredentialResult
-    | CancelledCredentialResult;
+  )) as HybridSignInResult;
 }
+
+type HybridSignInResult =
+  | AppleIdCredentialResult
+  | GoogleIdCredentialResult
+  | PasswordCredentialResult
+  | CancelledCredentialResult;
 
 /**
  * Creates a passkey from a WebAuthn `PublicKeyCredentialCreationOptions` JSON (`requestJson`).

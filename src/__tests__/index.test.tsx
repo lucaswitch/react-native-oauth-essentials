@@ -61,6 +61,22 @@ describe('googleSignIn', () => {
       expect.objectContaining({ serverClientId: 'web-id' })
     );
   });
+
+  it('reads the client id from the app config when none is passed', async () => {
+    await library.googleSignIn();
+    expect(mockNative.googleSignIn).toHaveBeenLastCalledWith(
+      '',
+      expect.any(Object)
+    );
+  });
+
+  it('takes the options as the first argument', async () => {
+    await library.googleSignIn({ scopes: ['email'], hostedDomain: 'x.com' });
+    expect(mockNative.googleSignIn).toHaveBeenLastCalledWith(
+      '',
+      expect.objectContaining({ scopes: ['email'], hostedDomain: 'x.com' })
+    );
+  });
 });
 
 describe('oauthSignIn', () => {
