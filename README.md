@@ -1,33 +1,104 @@
-# About
+<div align="center">
 
-**React Native OAuth Essentials** is an essential OAuth solution for React Native apps. It provides **up-to-date Google
-Sign-In, Apple Sign-In, saved passwords, passkeys and generic OAuth 2.0 / OpenID Connect**, delivering a **native sign-in experience** with a simple, promise-based
-API. It's a must-have for every React Native app.
+# 🔐 React Native OAuth Essentials
 
-## Installation
+**Every sign-in your app needs, in one library.**<br/>
+Google · Apple · Saved passwords · Passkeys · Any OAuth 2.0 / OpenID Connect provider
 
-Install the library via npm:
+[![npm version](https://img.shields.io/npm/v/react-native-oauth-essentials?style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/react-native-oauth-essentials)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-oauth-essentials?style=flat-square&color=blue)](https://www.npmjs.com/package/react-native-oauth-essentials)
+[![license](https://img.shields.io/npm/l/react-native-oauth-essentials?style=flat-square&color=green)](./LICENSE)
+![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey?style=flat-square)
+![expo](https://img.shields.io/badge/Expo-config%20plugin-000020?style=flat-square&logo=expo)
+![new architecture](https://img.shields.io/badge/New%20Architecture-ready-61dafb?style=flat-square&logo=react)
+
+[📖 Docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/intro) ·
+[⚙️ Installation](https://lucaswitch.github.io/react-native-oauth-essentials/docs/installation) ·
+[🤖 AI setup prompt](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) ·
+[📜 Changelog](./CHANGELOG.md)
+
+</div>
+
+---
+
+## ✨ Why this library?
+
+Most React Native apps end up stitching together several sign-in libraries, each with its own philosophy and API. This one
+gives you **a single, promise-based API** with a **truly native experience** on both platforms:
+
+- 🟢 **Google Sign-In**: GoogleSignIn SDK on iOS, Credential Manager on Android.
+- 🍎 **Sign in with Apple**: native on iOS (required by the App Store when you offer Google), web flow on Android.
+- 🔑 **Saved passwords & passkeys**: the system pickers, including iOS AutoFill.
+- 🌐 **Any OAuth 2.0 / OpenID Connect provider**: GitHub, Microsoft, Auth0, Keycloak… with PKCE.
+- 🧩 **Expo config plugin** and a **Jest mock** included.
+- 🧾 **Fully typed**, with typed errors you can narrow with `isCredentialError`.
+
+> [!NOTE]
+> Requires the **New Architecture**. Not supported in Expo Go: use a [development build](#-expo).
+
+## 📦 Installation
 
 ```bash
 npm install react-native-oauth-essentials
-```
-
-```bash
+# or
 yarn add react-native-oauth-essentials
 ```
 
-## How to use it
+Then install the iOS pods and rebuild the app (reloading Metro is not enough, this library has native code):
 
-Please jump to our docs website
+```bash
+cd ios && pod install
+```
 
-[Docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/intro)
-[Installation](https://lucaswitch.github.io/react-native-oauth-essentials/docs/installation)
+Using Expo? Jump to [Expo](#-expo). Using a coding agent? Paste the
+[setup prompt for AI agents](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) and let it configure everything.
 
-Using a coding agent? Paste the [setup prompt for AI agents](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) to install and configure everything.
+## 🚀 Quick start
 
-Requires the **New Architecture**. Not supported in Expo Go: use a development build and the [Expo config plugin](#expo).
+Sign in with Google in a few lines:
 
-## Features
+```tsx
+import { Button } from 'react-native';
+import {
+  googleSignIn,
+  CredentialsType,
+  isCredentialError,
+  CredentialError,
+} from 'react-native-oauth-essentials';
+
+export function GoogleButton() {
+  const onPress = async () => {
+    try {
+      const result = await googleSignIn();
+
+      if (result.type === CredentialsType.CANCELLED) return; // the user closed the UI
+
+      if (result.type === CredentialsType.GOOGLE_ID) {
+        // Send the idToken to YOUR backend and verify it there.
+        await api.signInWithGoogle(result.data.idToken);
+      }
+    } catch (e) {
+      if (isCredentialError(e, CredentialError.CONFIGURATION_ERROR)) console.error(e.message);
+      else throw e;
+    }
+  };
+
+  return <Button title="Continue with Google" onPress={onPress} />;
+}
+```
+
+That's the whole pattern: **call a function, check `result.type`, send the token to your backend.** Every other method
+works the same way.
+
+### Three things to know
+
+1. **Cancelling is not an error.** If the user dismisses the UI, the promise **resolves** with
+   `{ type: CredentialsType.CANCELLED, data: null }`.
+2. **Real errors reject** with an `error.code` from `CredentialError`. Narrow them with `isCredentialError`.
+3. **Setup mistakes tell you what to fix.** A missing client id or URL scheme rejects with `CONFIGURATION_ERROR` and a
+   message that has the exact value to add.
+
+## 🧭 What's supported
 
 | Feature | iOS | Android |
 |---|---|---|
@@ -41,9 +112,10 @@ Requires the **New Architecture**. Not supported in Expo Go: use a development b
 Android features based on Credential Manager need Google Play Services. Exact per-platform behavior of every function:
 [Methods reference](https://lucaswitch.github.io/react-native-oauth-essentials/docs/methods).
 
-## API
+## 📚 API reference
 
-### Import
+<details>
+<summary><b>Import everything</b></summary>
 
 ```typescript
 import {
@@ -86,6 +158,8 @@ import {
 } from 'react-native-oauth-essentials';
 ```
 
+</details>
+
 ### Conventions
 
 - Dismissing the UI **resolves** `{ type: CredentialsType.CANCELLED, data: null }` instead of rejecting.
@@ -95,7 +169,8 @@ import {
 - In development, options that have no effect on the current platform log a `console.warn` once
   (`[react-native-oauth-essentials] googleSignIn: "hint" is ignored on Android.`).
 
-### Constants
+<details>
+<summary><b>Constants</b> (feature detection)</summary>
 
 | Constant | iOS | Android |
 |---|---|---|
@@ -106,6 +181,8 @@ import {
 | `HYBRID_SUPPORTED` | `true` | Same as `GOOGLE_PLAY_SERVICES_SUPPORTED` |
 | `PASSKEYS_SUPPORTED` | iOS 16+ | Android 9+ |
 | `OAUTH_REDIRECT_URI` | `<bundle id, lowercased>://oauth/callback` | `<applicationId>://oauth/callback` |
+
+</details>
 
 ### Google
 
@@ -121,7 +198,7 @@ omitted, read from the app config:
   exact scheme to add.
 - Android: the web client id from the `com.oauthessentials.GOOGLE_WEB_CLIENT_ID` `<meta-data>` of AndroidManifest.xml,
   then the Firebase `default_web_client_id` string (from `google-services.json`). The Android client id is never passed.
-- None found: rejects with `CONFIGURATION_ERROR`. The [Expo config plugin](#expo) writes all of it.
+- None found: rejects with `CONFIGURATION_ERROR`. The [Expo config plugin](#-expo) writes all of it.
 
 `clientId` can also be passed as `{ iosClientId?, webClientId? }` (all from the same Google Cloud project; a passed id
 wins over the config), or as a string used as is (the iOS client id on iOS, the web client id on Android).
@@ -287,7 +364,8 @@ success.remove();
 Success and failure fire for `googleSignIn`, `googleSilentSignIn`, `getPassword`, `appleSignIn`, `hybridSignIn`,
 `createPassKey` and `getPassKey`.
 
-### Options
+<details>
+<summary><b>Options</b> (TypeScript types)</summary>
 
 ```typescript
 type GoogleClientId = string | { iosClientId?: string; webClientId?: string };
@@ -324,7 +402,10 @@ type OAuthSignInOptions = {
 };
 ```
 
-### Results
+</details>
+
+<details>
+<summary><b>Results</b> (TypeScript types)</summary>
 
 ```typescript
 type GoogleIdCredentialResult = {
@@ -387,6 +468,8 @@ type OAuthCredentialResult = {
 type CancelledCredentialResult = { type: CredentialsType.CANCELLED; data: null };
 ```
 
+</details>
+
 ### Error codes
 
 | `CredentialError` | When |
@@ -414,7 +497,7 @@ try {
 }
 ```
 
-## Expo
+## 📱 Expo
 
 Not supported in Expo Go (it only contains the Expo SDK native code; importing the library there throws an error saying
 so): use a development build (`npx expo run:ios` / `npx expo run:android` or `eas build --profile development`). The
@@ -446,7 +529,7 @@ reloading Metro is not enough) with the New Architecture enabled.
 
 [Expo docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/expo)
 
-## Testing (Jest)
+## 🧪 Testing (Jest)
 
 Importing the library in Jest fails with a `native module "OauthEssentials" was not found` error unless you use the
 bundled mock:
@@ -459,7 +542,11 @@ jest.mock('react-native-oauth-essentials', () => require('react-native-oauth-ess
 Every method is a `jest.fn()` resolving a plausible result; override it per test with `mockResolvedValueOnce` /
 `mockRejectedValueOnce`. [Testing docs](https://lucaswitch.github.io/react-native-oauth-essentials/docs/testing)
 
-## Short history
+## 🤝 Contributing
+
+Contributions are welcome! Read the [contributing guide](./CONTRIBUTING.md) and the [code of conduct](./CODE_OF_CONDUCT.md).
+
+## 💬 Short history
 
 I’ve always felt that React Native lacked a single library that handles OAuth end-to-end. Most React Native apps end up
 downloading multiple libraries just to implement OAuth features. Each library feels different—they follow different
@@ -473,6 +560,14 @@ I was frustrated going through this process myself, and seeing how much time Rea
 deliver a “good enough” sign-in experience. So I thought—why not create one library that actually behaves and doesn’t
 make me want to throw my laptop out the window?
 
-## Philosophy
+## 💚 Philosophy
 
 Free forever, up-to-date features, and focused only on the essentials your mobile app really needs.
+
+---
+
+<div align="center">
+
+MIT © [Lucas Alves](https://github.com/lucaswitch) · If this saved you time, a ⭐ on [GitHub](https://github.com/lucaswitch/react-native-oauth-essentials) helps a lot!
+
+</div>
