@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 (2026-11-09)
+
+* feat(ios): upgrade GoogleSignIn to 10 and the Android native libraries ([3948bd9](https://github.com/lucaswitch/react-native-oauth-essentials/commit/3948bd9))
+
+
+### BREAKING CHANGE
+
+* the minimum iOS version is now 16.0 (it was the minimum of React Native, 15.1).
+Apps that use AppAuth 2.x or GTMAppAuth 5.x directly must move to AppAuth 3.x and GTMAppAuth 6.x.
+
 ## [1.1.1](https://github.com/lucaswitch/react-native-oauth-essentials/compare/v1.1.0...v1.1.1) (2026-10-14)
 
 ### Documentation
