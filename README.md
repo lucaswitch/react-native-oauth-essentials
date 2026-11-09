@@ -50,6 +50,8 @@ Then install the iOS pods and rebuild the app (reloading Metro is not enough, th
 cd ios && pod install
 ```
 
+The iOS side uses GoogleSignIn 10 (iOS 16+). Requires React Native 0.77+ with the New Architecture.
+
 Using Expo? Jump to [Expo](#-expo). Using a coding agent? Paste the
 [setup prompt for AI agents](https://lucaswitch.github.io/react-native-oauth-essentials/docs/ai-setup) and let it configure everything.
 

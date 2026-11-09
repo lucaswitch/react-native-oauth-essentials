@@ -60,24 +60,25 @@ android {
     sourceCompatibility JavaVersion.VERSION_1_8
     targetCompatibility JavaVersion.VERSION_1_8
   }
+
+  // googleid 1.2.1 ships Kotlin 2.4 metadata; the Kotlin of the app (RN: 2.1) only reads up to
+  // 2.2. Only this module references its classes, and the bytecode is plain JVM.
+  kotlinOptions {
+    freeCompilerArgs += ["-Xskip-metadata-version-check"]
+  }
 }
 
 dependencies {
   implementation "com.facebook.react:react-android"
 
   // Needed oauth libraries
-  implementation 'androidx.browser:browser:1.9.0'
-  // androidx.credentials fixado em estável 1.5.0 com `strictly`: o
-  // play-services-auth:21.5.0 puxa transitivamente credentials/-play-services-auth
-  // 1.6.0-rc01 (release candidate), cujo provider GMS deixa o chooser
-  // (SignInCredentialChooserActivity) pendurado — getCredential nunca resolve.
-  // `strictly` faz o downgrade da transitiva e propaga pro classpath do app.
+  implementation 'androidx.browser:browser:1.10.0'
   implementation('androidx.credentials:credentials') {
-    version { strictly '1.5.0' }
+    version { strictly '1.6.0' }
   }
   implementation('androidx.credentials:credentials-play-services-auth') {
-    version { strictly '1.5.0' }
+    version { strictly '1.6.0' }
   }
-  implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.0'
-  implementation 'com.google.android.gms:play-services-auth:21.5.0'
+  implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
+  implementation 'com.google.android.gms:play-services-auth:22.0.0'
 }

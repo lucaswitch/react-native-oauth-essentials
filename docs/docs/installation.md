@@ -25,6 +25,8 @@ cd ios;
 pod install; or // bundle exec pod install
 ```
 
+Requirements: React Native 0.77+ with the New Architecture, iOS 16+ and Android 7.0+ (API 24).
+
 ## Expo
 
 Expo Go is not supported. Use a development build and the config plugin, which writes the native config described
